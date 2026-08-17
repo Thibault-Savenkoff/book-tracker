@@ -1,4 +1,4 @@
-# Bibliothèque
+# BiblioLog
 
 PWA perso pour suivre romans/BD/mangas lus (note + avis, pas de social). Installable sur iPhone via "Ajouter à l'écran d'accueil" (Safari), tourne aussi tel quel sur PC.
 

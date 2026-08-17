@@ -3,17 +3,20 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    allowedHosts: true,
+  },
   plugins: [
     svelte(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: 'Bibliothèque',
-        short_name: 'Bibliothèque',
+        name: 'BiblioLog',
+        short_name: 'BiblioLog',
         description: 'Suivi perso de romans, BD et mangas lus',
-        theme_color: '#141414',
-        background_color: '#141414',
+        theme_color: '#0d0d0f',
+        background_color: '#0d0d0f',
         display: 'standalone',
         start_url: '/',
         icons: [

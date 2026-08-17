@@ -13,9 +13,7 @@ create table if not exists books (
   rating smallint check (rating between 0 and 5),
   review text,
   date_added timestamptz not null default now(),
-  date_read date,
-  status text not null default 'wishlist' check (status in ('wishlist', 'reading', 'read')),
-  pages integer
+  date_read date
 );
 
 create index if not exists books_user_id_idx on books(user_id);

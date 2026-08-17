@@ -19,4 +19,6 @@ export type Book = {
   review: string | null
   date_added: string
   date_read: string | null
+  status: 'wishlist' | 'reading' | 'read'
+  pages: number | null
 }
