@@ -1,14 +1,13 @@
 <script lang="ts">
   import { supabase, type Book } from '../supabase'
   import { currentView } from '../nav'
-  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, CATEGORY_DOT_CLASS, STATUS_LABEL } from '../bookStyle'
+  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
   import { booksStore } from '../booksStore'
   import { searchQuery, filterCategory } from '../collectionFilter'
 
   let books = $state<Book[]>([])
   let loading = $state(true)
-  let quickView = $state<Book | null>(null)
 
   async function load() {
     loading = true
@@ -111,36 +110,13 @@
   const allItems = $derived(groupDisplay(books))
   const resultsDisplay = $derived(resultsActive ? groupDisplay(filtered) : [])
 
-  /** Un livre ouvre le volet d'aperçu rapide ; une série filtre directement la collection sur son nom. */
+  /** Un livre ouvre sa fiche en volet ; une série filtre directement la collection sur son nom. */
   function openItem(item: DisplayItem) {
-    if (item.kind === 'book') quickView = item.book
+    if (item.kind === 'book') currentView.set({ name: 'book', id: item.book.id })
     else {
       filterCategory.set('Toutes')
       searchQuery.set(item.series)
     }
-  }
-
-  async function markFinished(b: Book, e: Event) {
-    e.stopPropagation()
-    const date_read = new Date().toISOString().slice(0, 10)
-    await supabase.from('books').update({ status: 'read', date_read }).eq('id', b.id)
-    books = books.map((x) => (x.id === b.id ? { ...x, status: 'read', date_read } : x))
-    if (quickView?.id === b.id) quickView = { ...quickView, status: 'read', date_read }
-  }
-
-  async function markReading(b: Book, e: Event) {
-    e.stopPropagation()
-    await supabase.from('books').update({ status: 'reading' }).eq('id', b.id)
-    books = books.map((x) => (x.id === b.id ? { ...x, status: 'reading' } : x))
-    if (quickView?.id === b.id) quickView = { ...quickView, status: 'reading' }
-  }
-
-  function stampDate(d: string | null): string {
-    if (!d) return ''
-    return new Date(`${d}T00:00:00`)
-      .toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
-      .toUpperCase()
-      .replace('.', '')
   }
 </script>
 
@@ -326,61 +302,3 @@
     {/if}
   {/if}
 </div>
-
-{#if quickView}
-  {@const b = quickView}
-  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-20" role="presentation" onclick={() => (quickView = null)}></div>
-  <aside id="slide-over" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-light-surface dark:bg-app-surface border-l border-light-border dark:border-app-border shadow-2xl z-30 flex flex-col">
-    <div class="h-16 px-6 border-b border-light-border dark:border-app-border flex items-center justify-between flex-shrink-0">
-      <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Aperçu Rapide</span>
-      <button class="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (quickView = null)} aria-label="Fermer">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-      </button>
-    </div>
-    <div class="flex-1 overflow-y-auto thin-scrollbar p-6 space-y-6">
-      <div class="flex flex-col items-center text-center">
-        <div class="w-32 aspect-[2/3] rounded-lg overflow-hidden cover-shadow border border-light-border dark:border-app-border mb-4 bg-light-card dark:bg-app-card">
-          {#if b.cover_url}
-            <img src={b.cover_url} alt={b.title} class="w-full h-full object-cover" />
-          {:else}
-            {@render coverFallback(b.title)}
-          {/if}
-        </div>
-        <span class={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border mb-1 ${CATEGORY_BADGE_CLASS[b.category]}`}>{CATEGORY_LABEL[b.category].toUpperCase()}</span>
-        <h3 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">{b.title}</h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400">{b.authors.join(', ')}</p>
-      </div>
-
-      <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-between text-xs font-mono">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-          <span class={`w-2 h-2 rounded-full ${CATEGORY_DOT_CLASS[b.category]}`}></span>
-          {STATUS_LABEL[b.status]}
-        </span>
-        {#if b.status === 'read' && b.date_read}
-          <span class="text-slate-900 dark:text-white font-semibold">Lu le {stampDate(b.date_read)}</span>
-        {/if}
-      </div>
-
-      <div class="space-y-2">
-        <button class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition" onclick={() => currentView.set({ name: 'book', id: b.id })}>
-          Ouvrir la fiche complète
-        </button>
-        {#if b.status === 'reading'}
-          <button
-            class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition"
-            onclick={(e) => markFinished(b, e)}
-          >
-            Marquer comme Terminé
-          </button>
-        {:else if b.status === 'wishlist'}
-          <button
-            class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition"
-            onclick={(e) => markReading(b, e)}
-          >
-            Commencer la lecture
-          </button>
-        {/if}
-      </div>
-    </div>
-  </aside>
-{/if}

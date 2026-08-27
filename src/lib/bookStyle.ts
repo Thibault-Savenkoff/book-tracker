@@ -52,7 +52,8 @@ export function categoryBg(category: string): string {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  wishlist: 'Envie de lire',
+  wishlist: 'À lire',
   reading: 'En cours',
-  read: 'Lu',
+  read: 'Terminé',
+  abandoned: 'Abandonné',
 }

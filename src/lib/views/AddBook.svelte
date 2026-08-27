@@ -8,6 +8,8 @@
 
   type Category = keyof typeof CATEGORY_LABEL
   type Status = keyof typeof STATUS_LABEL
+  // ponytail: "Abandonné" n'a pas de sens au moment d'ajouter un livre, seulement depuis la fiche.
+  const ADD_STATUSES: Status[] = ['wishlist', 'reading', 'read']
 
   let { initialQuery }: { initialQuery?: string } = $props()
   const seedQuery = initialQuery
@@ -337,7 +339,7 @@
         {/each}
       </div>
       <div class="flex flex-wrap gap-2 justify-center">
-        {#each Object.keys(STATUS_LABEL) as s (s)}
+        {#each ADD_STATUSES as s (s)}
           <button type="button" class={chipClass(seriesStatus === s)} onclick={() => (seriesStatus = s as Status)}>{STATUS_LABEL[s]}</button>
         {/each}
       </div>
@@ -512,7 +514,7 @@
         {/each}
       </div>
       <div class="flex flex-wrap gap-2 justify-center">
-        {#each Object.keys(STATUS_LABEL) as s (s)}
+        {#each ADD_STATUSES as s (s)}
           <button type="button" class={chipClass(previewStatus === s)} onclick={() => (previewStatus = s as Status)}>{STATUS_LABEL[s]}</button>
         {/each}
       </div>

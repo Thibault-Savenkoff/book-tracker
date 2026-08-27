@@ -19,6 +19,15 @@ export type Book = {
   review: string | null
   date_added: string
   date_read: string | null
-  status: 'wishlist' | 'reading' | 'read'
+  status: 'wishlist' | 'reading' | 'read' | 'abandoned'
   pages: number | null
+  pages_read: number
+}
+
+export type Quote = {
+  id: string
+  book_id: string
+  text: string
+  page: number | null
+  created_at: string
 }

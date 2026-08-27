@@ -23,18 +23,19 @@
     <main class="flex-1 flex flex-col h-full overflow-hidden">
       <Header />
       <div class="flex-1 overflow-y-auto thin-scrollbar pb-24 md:pb-8">
-        {#if $currentView.name === 'collection'}
-          <Collection />
-        {:else if $currentView.name === 'planning'}
+        {#if $currentView.name === 'planning'}
           <Planning />
         {:else if $currentView.name === 'stats'}
           <Stats />
         {:else if $currentView.name === 'add'}
           <AddBook initialQuery={$currentView.query} />
-        {:else if $currentView.name === 'book'}
-          <BookDetail id={$currentView.id} />
+        {:else}
+          <Collection />
         {/if}
       </div>
+      {#if $currentView.name === 'book'}
+        <BookDetail id={$currentView.id} />
+      {/if}
     </main>
   </div>
 {/if}
