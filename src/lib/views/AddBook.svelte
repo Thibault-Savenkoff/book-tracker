@@ -43,6 +43,7 @@
   let seriesTo = $state(1)
   let seriesCovers = $state<Record<number, string>>({})
   let seriesCoversLoading = $state(false)
+  let isSearchingVolume = $state<Record<number, boolean>>({})
   let volumePicker = $state<number | null>(null)
   let volumePickerCandidates = $state<string[]>([])
   let volumePickerLoading = $state(false)
@@ -221,6 +222,44 @@
   function foundVolume(g: { items: BookLookupResult[] }, n: number): BookLookupResult | null {
     return g.items.find((r) => parseSeriesVolume(r.title).volume === n) ?? null
   }
+
+  // $derived (pas un simple calcul dans le template) : se recalcule dès que fromVolume/toVolume
+  // changent, ce qui redéclenche l'effet de chargement des couvertures ci-dessous.
+  const seriesVolumeList = $derived(
+    seriesView ? Array.from({ length: Math.max(0, Math.min(seriesTo, seriesFrom + 299) - seriesFrom + 1) }, (_, i) => seriesFrom + i) : [],
+  )
+
+  /** Une recherche globale sur la série ne remonte qu'un échantillon partiel et désordonné
+   * (vérifié : 20 résultats sur 42 tomes réels) — on cible donc explicitement "Tome N" pour
+   * chaque tome resté sans couverture (ni résultat de recherche, ni MangaDex). */
+  async function loadMissingCover(seriesTitle: string, volNumber: number) {
+    if (seriesCovers[volNumber] || isSearchingVolume[volNumber]) return
+    isSearchingVolume[volNumber] = true
+    try {
+      const q = encodeURIComponent(`intitle:"${seriesTitle}" "tome ${volNumber}"`)
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`)
+      const data = await res.json()
+      const img = data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail
+      if (img) seriesCovers[volNumber] = img.replace('http://', 'https://')
+    } catch (e) {
+      console.error(`Erreur cover T${volNumber}`, e)
+    } finally {
+      isSearchingVolume[volNumber] = false
+    }
+  }
+
+  /** Par lots de 5 en parallèle plutôt que tout d'un coup : évite de saturer l'API Google Books
+   * sur une grande plage (ex. 1 à 42) et de se faire rate-limiter. */
+  async function loadMissingCoversBatched(g: { series: string; items: BookLookupResult[] }, volumes: number[]) {
+    const missing = volumes.filter((n) => !foundVolume(g, n)?.cover_url && !seriesCovers[n] && !isSearchingVolume[n])
+    for (let i = 0; i < missing.length; i += 5) {
+      await Promise.all(missing.slice(i, i + 5).map((n) => loadMissingCover(g.series, n)))
+    }
+  }
+
+  $effect(() => {
+    if (seriesView && seriesVolumeList.length) loadMissingCoversBatched(seriesView, seriesVolumeList)
+  })
 
   /** Tome resté sans couverture (ni résultat trouvé, ni MangaDex) : recherche ciblée sur ce tome
    * précis, réutilise le même moteur que le sélecteur de couverture de la fiche livre. */
@@ -442,20 +481,32 @@
       </div>
       {#if seriesCoversLoading}<p class="text-xs text-slate-400">Récupération des couvertures MangaDex…</p>{/if}
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
-        {#each Array.from({ length: Math.max(0, Math.min(seriesTo, seriesFrom + 199) - seriesFrom + 1) }) as _, i (seriesFrom + i)}
-          {@const n = seriesFrom + i}
+        {#each seriesVolumeList as n (n)}
           {@const match = foundVolume(seriesView, n)}
           {@const cover = match?.cover_url ?? seriesCovers[n]}
+          {@const searching = isSearchingVolume[n]}
           <div class="flex flex-col items-center gap-1.5">
             <div
               class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border"
               class:cursor-pointer={!cover}
+              class:animate-pulse={searching && !cover}
               role="button"
               tabindex="0"
               onclick={() => !cover && pickVolumeCover(n)}
               onkeydown={(e) => e.key === 'Enter' && !cover && pickVolumeCover(n)}
             >
-              {#if cover}<img src={cover} alt="Tome {n}" class="w-full h-full object-cover" />{:else}{@render coverFallback(`T${n}`)}{/if}
+              {#if cover}
+                <img src={cover} alt="Tome {n}" class="w-full h-full object-cover" />
+              {:else if searching}
+                <div class="w-full h-full flex items-center justify-center">
+                  <svg class="animate-spin text-slate-400" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" opacity="0.25" />
+                    <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+                  </svg>
+                </div>
+              {:else}
+                {@render coverFallback(`T${n}`)}
+              {/if}
             </div>
             <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">T{n}</div>
           </div>
