@@ -43,6 +43,9 @@ export const CATEGORY_DOT_CLASS: Record<string, string> = {
   autre: 'bg-slate-400',
 }
 
+/** Même palette, pour les barres de répartition (Stats). */
+export const CATEGORY_BAR_CLASS = CATEGORY_DOT_CLASS
+
 export function categoryBg(category: string): string {
   const hex = CATEGORY_COLOR[category] ?? CATEGORY_COLOR.autre
   const r = parseInt(hex.slice(1, 3), 16)
