@@ -1,16 +1,14 @@
 <script lang="ts">
   import { supabase, type Book } from '../supabase'
   import { currentView } from '../nav'
-  import { CATEGORY_LABEL, CATEGORY_COLOR, CATEGORY_GRADIENT, CATEGORY_BADGE_CLASS, CATEGORY_DOT_CLASS, STATUS_LABEL } from '../bookStyle'
+  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, CATEGORY_DOT_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
+  import { booksStore } from '../booksStore'
+  import { searchQuery, filterCategory } from '../collectionFilter'
 
   let books = $state<Book[]>([])
   let loading = $state(true)
-  let query = $state('')
-  let filterCategory = $state<string>('Toutes')
-  let resultsAsList = $state(false)
   let quickView = $state<Book | null>(null)
-  const categories = ['roman', 'bd', 'manga', 'comics', 'autre']
 
   async function load() {
     loading = true
@@ -20,13 +18,17 @@
   }
   load()
 
-  const resultsActive = $derived(query.trim() !== '' || filterCategory !== 'Toutes')
+  $effect(() => {
+    booksStore.set(books)
+  })
+
+  const resultsActive = $derived($searchQuery.trim() !== '' || $filterCategory !== 'Toutes')
 
   const filtered = $derived(
     books.filter(
       (b) =>
-        (filterCategory === 'Toutes' || b.category === filterCategory) &&
-        (!query.trim() || `${b.title} ${b.authors.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())),
+        ($filterCategory === 'Toutes' || b.category === $filterCategory) &&
+        (!$searchQuery.trim() || `${b.title} ${b.authors.join(' ')}`.toLowerCase().includes($searchQuery.trim().toLowerCase())),
     ),
   )
 
@@ -105,23 +107,16 @@
     return items
   }
 
-  const shelves = $derived.by(() => {
-    if (resultsActive) return []
-    return (['reading', 'read', 'wishlist'] as const).map((status) => ({
-      status,
-      label: status === 'reading' ? 'En cours de lecture' : status === 'read' ? 'Déjà lus' : 'Envie de lire',
-      items: groupDisplay(books.filter((b) => b.status === status)),
-    }))
-  })
-
+  const readingItems = $derived(groupDisplay(books.filter((b) => b.status === 'reading')))
+  const allItems = $derived(groupDisplay(books))
   const resultsDisplay = $derived(resultsActive ? groupDisplay(filtered) : [])
 
   /** Un livre ouvre le volet d'aperçu rapide ; une série filtre directement la collection sur son nom. */
   function openItem(item: DisplayItem) {
     if (item.kind === 'book') quickView = item.book
     else {
-      filterCategory = 'Toutes'
-      query = item.series
+      filterCategory.set('Toutes')
+      searchQuery.set(item.series)
     }
   }
 
@@ -140,10 +135,6 @@
     if (quickView?.id === b.id) quickView = { ...quickView, status: 'reading' }
   }
 
-  function signOut() {
-    if (confirm('Se déconnecter ?')) supabase.auth.signOut()
-  }
-
   function stampDate(d: string | null): string {
     if (!d) return ''
     return new Date(`${d}T00:00:00`)
@@ -151,163 +142,106 @@
       .toUpperCase()
       .replace('.', '')
   }
-
-  function chipClass(active: boolean) {
-    return active
-      ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
-      : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-  }
 </script>
 
+{#snippet coverFallback(title: string)}
+  <div class="w-full h-full bg-light-card dark:bg-app-card flex items-center justify-center p-3">
+    <span class="text-[11px] font-semibold leading-tight text-slate-500 dark:text-slate-400 text-center line-clamp-4">{title}</span>
+  </div>
+{/snippet}
+
+{#snippet readingCard(item: DisplayItem)}
+  {@const title = item.kind === 'book' ? item.book.title : item.series}
+  {@const cover = item.kind === 'book' ? item.book.cover_url : item.cover_url}
+  {@const category = item.kind === 'book' ? item.book.category : item.category}
+  {@const author = item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}
+  <div
+    role="button"
+    tabindex="0"
+    onclick={() => openItem(item)}
+    onkeydown={(e) => e.key === 'Enter' && openItem(item)}
+    class="group p-4 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border hover:border-slate-300 dark:hover:border-app-borderHover shadow-sm dark:shadow-none transition cursor-pointer flex gap-4"
+  >
+    <div class="w-20 h-28 rounded-md overflow-hidden bg-slate-100 dark:bg-app-card flex-shrink-0 cover-shadow group-hover:scale-105 transition-transform duration-300">
+      {#if cover}
+        <img src={cover} alt={title} class="w-full h-full object-cover" />
+      {:else}
+        {@render coverFallback(title)}
+      {/if}
+    </div>
+    <div class="flex-1 flex flex-col justify-between min-w-0">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${CATEGORY_BADGE_CLASS[category]}`}>{CATEGORY_LABEL[category].toUpperCase()}</span>
+        </div>
+        <h3 class="font-semibold text-sm text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">{title}</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{author}</p>
+      </div>
+      {#if item.kind === 'book'}
+        <div class="flex items-center gap-1.5 text-[10px] font-mono text-amber-600 dark:text-amber-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+          En cours de lecture
+        </div>
+      {/if}
+    </div>
+  </div>
+{/snippet}
+
 {#snippet bookCard(item: DisplayItem)}
-  <div class="group flex flex-col cursor-pointer w-full">
+  {@const title = item.kind === 'book' ? item.book.title : item.series}
+  {@const cover = item.kind === 'book' ? item.book.cover_url : item.cover_url}
+  {@const category = item.kind === 'book' ? item.book.category : item.category}
+  {@const author = item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}
+  <div class="group flex flex-col cursor-pointer">
     <div
       class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1"
     >
-      <button class="absolute inset-0 w-full h-full" onclick={() => openItem(item)} aria-label={item.kind === 'book' ? item.book.title : item.series}>
-        {#if item.kind === 'book'}
-          {#if item.book.cover_url}
-            <img src={item.book.cover_url} alt={item.book.title} class="w-full h-full object-cover" />
-          {:else}
-            <div class="w-full h-full flex items-end p-2" style="background:{CATEGORY_GRADIENT[item.book.category]}">
-              <span class="relative z-10 text-[11px] font-semibold leading-tight text-white">{item.book.title}</span>
-            </div>
-          {/if}
-        {:else if item.cover_url}
-          <img src={item.cover_url} alt={item.series} class="w-full h-full object-cover" />
+      <button class="absolute inset-0 w-full h-full" onclick={() => openItem(item)} aria-label={title}>
+        {#if cover}
+          <img src={cover} alt={title} class="w-full h-full object-cover" />
         {:else}
-          <div class="w-full h-full flex items-end p-2" style="background:{CATEGORY_GRADIENT[item.category]}">
-            <span class="relative z-10 text-[11px] font-semibold leading-tight text-white">{item.series}</span>
-          </div>
+          {@render coverFallback(title)}
         {/if}
       </button>
 
       {#if item.kind === 'series'}
-        <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/60 text-white pointer-events-none">×{item.count}</span>
-      {:else if item.book.status === 'reading'}
-        <button
-          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"
-          onclick={(e) => markFinished(item.book, e)}
-          title="Marquer comme lu"
+        <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-slate-700 dark:text-slate-200 border border-light-border dark:border-white/10 pointer-events-none"
+          >×{item.count}</span
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        </button>
+      {:else if item.book.status === 'read'}
+        <span
+          class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 pointer-events-none"
+        >
+          LU
+        </span>
       {:else if item.book.status === 'wishlist'}
         <button
-          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"
+          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-white/90 dark:bg-black/70 backdrop-blur-md text-indigo-600 dark:text-indigo-400 border border-light-border dark:border-white/10 flex items-center justify-center"
           onclick={(e) => markReading(item.book, e)}
           title="Commencer la lecture"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="currentColor" /></svg>
         </button>
-      {:else if item.book.status === 'read'}
-        <span
-          class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 pointer-events-none"
-        >
-          LU · {stampDate(item.book.date_read)}
-        </span>
       {/if}
     </div>
     <button class="text-left w-full" onclick={() => openItem(item)}>
-      <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-        {item.kind === 'book' ? item.book.title : item.series}
-      </h4>
-      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-        {item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}
-      </p>
+      <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{title}</h4>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">{author}</p>
     </button>
   </div>
 {/snippet}
 
 <div class="p-4 md:p-8 space-y-8">
-  <div class="flex flex-col gap-4">
-    <div>
-      <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500"
-        >{books.length} livre{books.length > 1 ? 's' : ''} dans ta bibliothèque</span
-      >
-      <h1 class="font-serif text-3xl font-bold text-slate-900 dark:text-white tracking-tight mt-1">Ma collection</h1>
-    </div>
-
-    <div class="relative max-w-md">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-        ><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" /><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
-      >
-      <input
-        placeholder="Rechercher un titre, un auteur…"
-        bind:value={query}
-        class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border focus:border-indigo-500 rounded-lg pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none transition"
-      />
-    </div>
-
-    <div class="flex gap-2 overflow-x-auto pb-1">
-      <button class={chipClass(filterCategory === 'Toutes')} onclick={() => (filterCategory = 'Toutes')}>Toutes</button>
-      {#each categories as c (c)}
-        <button class={chipClass(filterCategory === c)} onclick={() => (filterCategory = c)}>{CATEGORY_LABEL[c]}</button>
-      {/each}
-    </div>
-  </div>
-
   {#if loading}
     <p class="text-center text-slate-400 py-16 text-sm">Chargement…</p>
   {:else if resultsActive}
     <div>
       <div class="flex items-center justify-between mb-4">
-        <span class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">{resultsDisplay.length} résultat{resultsDisplay.length > 1 ? 's' : ''}</span>
-        <div class="flex gap-1">
-          <button
-            class={`w-8 h-8 rounded-lg flex items-center justify-center ${!resultsAsList ? 'bg-slate-100 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
-            onclick={() => (resultsAsList = false)}
-            aria-label="Vue grille"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              ><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
-                x="4"
-                y="13"
-                width="7"
-                height="7"
-                rx="1.5"
-                stroke="currentColor"
-                stroke-width="2"
-              /><rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /></svg
-            >
-          </button>
-          <button
-            class={`w-8 h-8 rounded-lg flex items-center justify-center ${resultsAsList ? 'bg-slate-100 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
-            onclick={() => (resultsAsList = true)}
-            aria-label="Vue liste"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-          </button>
-        </div>
+        <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Résultats</h2>
+        <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{resultsDisplay.length} résultat{resultsDisplay.length > 1 ? 's' : ''}</span>
       </div>
       {#if resultsDisplay.length === 0}
         <p class="text-center text-slate-400 py-16 text-sm">Aucun livre ne correspond à cette recherche.</p>
-      {:else if resultsAsList}
-        <div class="flex flex-col divide-y divide-light-border dark:divide-app-border">
-          {#each resultsDisplay as item (item.key)}
-            <button class="flex items-center gap-3 py-3 text-left" onclick={() => openItem(item)}>
-              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
-                {#if item.kind === 'book'}
-                  {#if item.book.cover_url}<img src={item.book.cover_url} alt={item.book.title} class="w-full h-full object-cover" />{:else}<div
-                      class="w-full h-full"
-                      style="background:{CATEGORY_GRADIENT[item.book.category]}"
-                    ></div>{/if}
-                {:else if item.cover_url}
-                  <img src={item.cover_url} alt={item.series} class="w-full h-full object-cover" />
-                {:else}
-                  <div class="w-full h-full" style="background:{CATEGORY_GRADIENT[item.category]}"></div>
-                {/if}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.kind === 'book' ? item.book.title : item.series}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
-              </div>
-              <svg width="9" height="15" viewBox="0 0 24 24" fill="none" class="text-slate-400 flex-shrink-0"
-                ><path d="M8 4l9 8-9 8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
-              >
-            </button>
-          {/each}
-        </div>
       {:else}
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
           {#each resultsDisplay as item (item.key)}
@@ -324,31 +258,50 @@
       >
     </div>
   {:else}
-    <div class="space-y-8">
-      {#each shelves as shelf (shelf.status)}
-        {#if shelf.items.length > 0}
-          <div>
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                {#if shelf.status === 'reading'}<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>{/if}
-                <h2 class="font-serif text-xl font-bold text-slate-900 dark:text-white">{shelf.label}</h2>
-              </div>
-              <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{shelf.items.length}</span>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
-              {#each shelf.items as item (item.key)}
-                {@render bookCard(item)}
-              {/each}
-            </div>
+    {#if readingItems.length > 0}
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Lectures Actuelles</h2>
           </div>
-        {/if}
-      {/each}
+          <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{readingItems.length} volume{readingItems.length > 1 ? 's' : ''} en cours</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {#each readingItems as item (item.key)}
+            {@render readingCard(item)}
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Tous les Ouvrages</h2>
+        <span class="text-xs font-mono text-slate-500">{books.length} livre{books.length > 1 ? 's' : ''}</span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
+        {#each allItems as item (item.key)}
+          {@render bookCard(item)}
+        {/each}
+
+        <button
+          onclick={() => currentView.set({ name: 'add' })}
+          class="aspect-[2/3] w-full rounded-xl border border-dashed border-light-border dark:border-app-border hover:border-indigo-500 flex flex-col items-center justify-center cursor-pointer group bg-light-surface/50 dark:bg-app-surface/40 hover:bg-light-surface dark:hover:bg-app-surface transition p-4 text-center"
+        >
+          <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 group-hover:bg-indigo-600 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:text-white mb-2 transition">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" /></svg>
+          </div>
+          <span class="text-xs font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">Scanner / Ajouter</span>
+        </button>
+      </div>
     </div>
 
     {#if seriesGroups.length > 0}
       <div>
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-serif text-xl font-bold text-slate-900 dark:text-white">Séries incomplètes</h2>
+          <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Séries incomplètes</h2>
           <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{seriesGroups.length}</span>
         </div>
         <div class="flex flex-col gap-3">
@@ -371,20 +324,14 @@
       </div>
     {/if}
   {/if}
-
-  <button class="block mx-auto mt-6 text-xs text-slate-400 dark:text-slate-500 underline" onclick={signOut}>Se déconnecter</button>
 </div>
 
 {#if quickView}
   {@const b = quickView}
-  <div
-    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-20"
-    role="presentation"
-    onclick={() => (quickView = null)}
-  ></div>
-  <aside class="fixed inset-y-0 right-0 w-full sm:w-96 bg-light-surface dark:bg-app-surface border-l border-light-border dark:border-app-border shadow-2xl z-30 flex flex-col">
+  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-20" role="presentation" onclick={() => (quickView = null)}></div>
+  <aside id="slide-over" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-light-surface dark:bg-app-surface border-l border-light-border dark:border-app-border shadow-2xl z-30 flex flex-col">
     <div class="h-16 px-6 border-b border-light-border dark:border-app-border flex items-center justify-between flex-shrink-0">
-      <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Aperçu rapide</span>
+      <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Aperçu Rapide</span>
       <button class="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (quickView = null)} aria-label="Fermer">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       </button>
@@ -395,7 +342,7 @@
           {#if b.cover_url}
             <img src={b.cover_url} alt={b.title} class="w-full h-full object-cover" />
           {:else}
-            <div class="w-full h-full" style="background:{CATEGORY_GRADIENT[b.category]}"></div>
+            {@render coverFallback(b.title)}
           {/if}
         </div>
         <span class={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border mb-1 ${CATEGORY_BADGE_CLASS[b.category]}`}>{CATEGORY_LABEL[b.category].toUpperCase()}</span>
@@ -414,10 +361,7 @@
       </div>
 
       <div class="space-y-2">
-        <button
-          class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition"
-          onclick={() => currentView.set({ name: 'book', id: b.id })}
-        >
+        <button class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition" onclick={() => currentView.set({ name: 'book', id: b.id })}>
           Ouvrir la fiche complète
         </button>
         {#if b.status === 'reading'}
@@ -425,7 +369,7 @@
             class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition"
             onclick={(e) => markFinished(b, e)}
           >
-            Marquer comme terminé
+            Marquer comme Terminé
           </button>
         {:else if b.status === 'wishlist'}
           <button

@@ -8,6 +8,7 @@
   import AddBook from './lib/views/AddBook.svelte'
   import BookDetail from './lib/views/BookDetail.svelte'
   import TopNav from './lib/views/TopNav.svelte'
+  import Header from './lib/views/Header.svelte'
 </script>
 
 {#if $authLoading}
@@ -17,23 +18,22 @@
 {:else if !$session}
   <Login />
 {:else}
-  <div class="h-dvh w-full flex flex-col md:flex-row overflow-hidden bg-light-bg dark:bg-app-bg transition-colors">
+  <div class="h-dvh w-full flex overflow-hidden bg-light-bg dark:bg-app-bg transition-colors">
     <TopNav active={$currentView.name} />
-    <main class="flex-1 flex flex-col overflow-hidden">
-      <div class="flex-1 overflow-y-auto thin-scrollbar pb-20 md:pb-0">
-        <div class="max-w-5xl mx-auto w-full">
-          {#if $currentView.name === 'collection'}
-            <Collection />
-          {:else if $currentView.name === 'planning'}
-            <Planning />
-          {:else if $currentView.name === 'stats'}
-            <Stats />
-          {:else if $currentView.name === 'add'}
-            <AddBook initialQuery={$currentView.query} />
-          {:else if $currentView.name === 'book'}
-            <BookDetail id={$currentView.id} />
-          {/if}
-        </div>
+    <main class="flex-1 flex flex-col h-full overflow-hidden">
+      <Header />
+      <div class="flex-1 overflow-y-auto thin-scrollbar pb-24 md:pb-8">
+        {#if $currentView.name === 'collection'}
+          <Collection />
+        {:else if $currentView.name === 'planning'}
+          <Planning />
+        {:else if $currentView.name === 'stats'}
+          <Stats />
+        {:else if $currentView.name === 'add'}
+          <AddBook initialQuery={$currentView.query} />
+        {:else if $currentView.name === 'book'}
+          <BookDetail id={$currentView.id} />
+        {/if}
       </div>
     </main>
   </div>
