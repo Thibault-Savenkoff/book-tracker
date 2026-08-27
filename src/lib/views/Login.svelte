@@ -3,20 +3,31 @@
   import { theme, toggleTheme } from '../theme'
 
   let email = $state('')
-  let sent = $state(false)
+  let password = $state('')
+  let signingIn = $state(false)
   let error = $state<string | null>(null)
+  let resetSent = $state(false)
 
-  async function sendMagicLink() {
+  async function signIn() {
     error = null
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    })
+    signingIn = true
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+    signingIn = false
+    if (err) error = err.message
+  }
+
+  async function sendPasswordReset() {
+    if (!email) {
+      error = 'Renseigne ton email pour recevoir le lien de réinitialisation.'
+      return
+    }
+    error = null
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
     if (err) {
       error = err.message
       return
     }
-    sent = true
+    resetSent = true
   }
 </script>
 
@@ -64,11 +75,11 @@
       </div>
     </div>
 
-    {#if sent}
+    {#if resetSent}
       <div class="flex items-center gap-2.5 px-3.5 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25">
         <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
         <p class="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
-          Lien envoyé à <strong class="font-semibold">{email}</strong>, vérifie ta boîte mail.
+          Lien de réinitialisation envoyé à <strong class="font-semibold">{email}</strong>, vérifie ta boîte mail.
         </p>
       </div>
     {:else}
@@ -76,7 +87,7 @@
         class="flex flex-col gap-4"
         onsubmit={(e) => {
           e.preventDefault()
-          sendMagicLink()
+          signIn()
         }}
       >
         <label class="flex flex-col gap-1.5">
@@ -89,13 +100,27 @@
             class="bg-slate-100 dark:bg-app-card border border-light-border dark:border-app-border rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
           />
         </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Mot de passe</span>
+          <input
+            type="password"
+            placeholder="••••••••"
+            bind:value={password}
+            required
+            class="bg-slate-100 dark:bg-app-card border border-light-border dark:border-app-border rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </label>
         <button
           type="submit"
-          class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition"
+          disabled={signingIn}
+          class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition disabled:opacity-60"
         >
-          Recevoir mon lien de connexion<span aria-hidden="true">→</span>
+          {signingIn ? 'Connexion…' : 'Se connecter'}
         </button>
         {#if error}<p class="text-red-500 text-xs text-center">{error}</p>{/if}
+        <button type="button" class="text-[11px] text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-center underline" onclick={sendPasswordReset}>
+          Mot de passe oublié ?
+        </button>
       </form>
       <div class="flex items-center gap-2.5 px-1 text-slate-400 justify-center">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"

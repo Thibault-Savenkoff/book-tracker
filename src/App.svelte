@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { session, authLoading } from './lib/auth'
+  import { session, authLoading, passwordRecovery } from './lib/auth'
   import { currentView } from './lib/nav'
   import Login from './lib/views/Login.svelte'
+  import ResetPassword from './lib/views/ResetPassword.svelte'
   import Collection from './lib/views/Collection.svelte'
   import Planning from './lib/views/Planning.svelte'
   import Stats from './lib/views/Stats.svelte'
@@ -15,6 +16,8 @@
   <div class="h-dvh flex items-center justify-center bg-light-bg dark:bg-app-bg">
     <p class="font-serif italic text-slate-400">Chargement…</p>
   </div>
+{:else if $passwordRecovery}
+  <ResetPassword />
 {:else if !$session}
   <Login />
 {:else}

@@ -4,12 +4,14 @@ import { supabase } from './supabase'
 
 export const session = writable<Session | null>(null)
 export const authLoading = writable(true)
+export const passwordRecovery = writable(false)
 
 supabase.auth.getSession().then(({ data }) => {
   session.set(data.session)
   authLoading.set(false)
 })
 
-supabase.auth.onAuthStateChange((_event, newSession) => {
+supabase.auth.onAuthStateChange((event, newSession) => {
   session.set(newSession)
+  if (event === 'PASSWORD_RECOVERY') passwordRecovery.set(true)
 })
