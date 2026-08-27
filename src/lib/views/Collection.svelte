@@ -145,8 +145,17 @@
 </script>
 
 {#snippet coverFallback(title: string)}
-  <div class="w-full h-full bg-light-card dark:bg-app-card flex items-center justify-center p-3">
-    <span class="text-[11px] font-semibold leading-tight text-slate-500 dark:text-slate-400 text-center line-clamp-4">{title}</span>
+  <div class="w-full h-full bg-app-card dark:bg-app-card border border-light-border dark:border-app-border flex flex-col items-center justify-center gap-2 p-3">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" class="text-slate-500 flex-shrink-0"
+      ><path
+        d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V4a2 2 0 00-2-2H6.5A2.5 2.5 0 004 4.5v15z"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      /></svg
+    >
+    <span class="font-serif text-xs font-semibold text-slate-200 text-center px-1 line-clamp-3">{title}</span>
   </div>
 {/snippet}
 
@@ -194,7 +203,7 @@
   {@const author = item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}
   <div class="group flex flex-col cursor-pointer">
     <div
-      class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1"
+      class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1 group-hover:border-slate-300 dark:group-hover:border-app-borderHover"
     >
       <button class="absolute inset-0 w-full h-full" onclick={() => openItem(item)} aria-label={title}>
         {#if cover}
@@ -214,14 +223,6 @@
         >
           LU
         </span>
-      {:else if item.book.status === 'wishlist'}
-        <button
-          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-white/90 dark:bg-black/70 backdrop-blur-md text-indigo-600 dark:text-indigo-400 border border-light-border dark:border-white/10 flex items-center justify-center"
-          onclick={(e) => markReading(item.book, e)}
-          title="Commencer la lecture"
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="currentColor" /></svg>
-        </button>
       {/if}
     </div>
     <button class="text-left w-full" onclick={() => openItem(item)}>
