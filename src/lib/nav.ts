@@ -8,5 +8,3 @@ export type View =
   | { name: 'book'; id: string }
 
 export const currentView = writable<View>({ name: 'collection' })
-
-export const NAV_SCREENS = ['collection', 'planning', 'stats'] as const

@@ -54,16 +54,15 @@
       acc += c.sharePct
       return `${c.color} ${start}% ${acc}%`
     })
-    if (acc < 100) parts.push(`rgba(255,255,255,0.06) ${acc}% 100%`)
+    if (acc < 100) parts.push(`var(--line) ${acc}% 100%`)
     return `conic-gradient(${parts.join(',')})`
   })
 </script>
 
 <div class="page">
   <div class="header">
-    <div class="blob" style="top:-80px;left:-40px;width:220px;height:220px;background:#4FB8FF;opacity:0.14;"></div>
-    <div class="eyebrow">Bilan de lecture</div>
-    <div class="page-title">Statistiques</div>
+    <span class="eyebrow">Bilan de lecture</span>
+    <h1 class="page-title">Statistiques</h1>
   </div>
 
   {#if loading}
@@ -75,17 +74,17 @@
         <div class="value">{totalRead}</div>
         <span class="sub">sur {totalBooks} au total</span>
       </div>
-      <div class="tile glass">
+      <div class="tile card">
         <div class="value small">{totalPages}</div>
         <div class="label small">Pages lues</div>
       </div>
-      <div class="tile glass">
+      <div class="tile card">
         <div class="value small">{avgRating}★</div>
         <div class="label small">Note moyenne</div>
       </div>
     </div>
 
-    <div class="panel glass">
+    <div class="panel card">
       <div class="panel-title">Lectures par mois</div>
       <div class="bars">
         {#each months() as m (m.label)}
@@ -98,7 +97,7 @@
     </div>
 
     {#if categoryStats.length > 0}
-      <div class="panel glass donut-panel">
+      <div class="panel card donut-panel">
         <div class="donut" style="background:{donutConic()}">
           <div class="donut-hole">{totalBooks}</div>
         </div>
@@ -121,13 +120,14 @@
     padding-bottom: 24px;
   }
   .header {
-    position: relative;
-    overflow: hidden;
-    padding: 58px 22px 16px;
+    padding: 24px 20px 16px;
+  }
+  .header .page-title {
+    margin-top: 4px;
   }
   .empty {
     text-align: center;
-    opacity: 0.55;
+    color: var(--ink-faint);
     padding: 2rem 1rem;
   }
   .tiles {
@@ -140,8 +140,8 @@
   .tile.big {
     grid-column: 1;
     grid-row: 1 / span 2;
-    background: linear-gradient(160deg, rgba(139, 143, 255, 0.22), rgba(139, 143, 255, 0.04));
-    border: 1px solid rgba(139, 143, 255, 0.25);
+    background: linear-gradient(160deg, var(--accent-tint), transparent);
+    border: 1px solid rgba(201, 164, 76, 0.28);
     border-radius: 22px;
     padding: 20px 16px;
     display: flex;
@@ -149,35 +149,36 @@
     justify-content: space-between;
   }
   .tile.big .value {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 52px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--ink);
     line-height: 1;
     margin: 14px 0;
   }
   .tile.big .label {
     font-size: 11px;
-    color: var(--text-dim);
+    color: var(--accent-strong);
     text-transform: uppercase;
     letter-spacing: 0.06em;
+    font-weight: 700;
   }
   .tile.big .sub {
     font-size: 11.5px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
   }
   .tile:not(.big) {
     padding: 14px 16px;
   }
   .value.small {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-size: 23px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--ink);
   }
   .label.small {
     font-size: 10.5px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
     margin-top: 3px;
   }
   .panel {
@@ -186,8 +187,9 @@
   }
   .panel-title {
     font-size: 13px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     margin-bottom: 16px;
+    font-weight: 600;
   }
   .bars {
     display: flex;
@@ -207,11 +209,11 @@
   .bar {
     width: 100%;
     border-radius: 5px 5px 0 0;
-    background: linear-gradient(to top, var(--accent), var(--accent-2));
+    background: var(--accent);
   }
   .bar-col span {
     font-size: 9.5px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
   }
   .donut-panel {
     display: flex;
@@ -229,13 +231,13 @@
     position: absolute;
     inset: 15px;
     border-radius: 50%;
-    background: #111217;
+    background: var(--surface);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
-    color: var(--text-dim);
-    font-weight: 600;
+    color: var(--ink-dim);
+    font-weight: 700;
   }
   .legend {
     flex: 1;
@@ -256,11 +258,11 @@
   }
   .legend-label {
     font-size: 12.5px;
-    color: rgba(242, 242, 245, 0.8);
+    color: var(--ink);
     flex: 1;
   }
   .legend-count {
     font-size: 12px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
   }
 </style>

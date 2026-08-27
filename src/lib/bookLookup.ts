@@ -14,15 +14,21 @@ export type BookLookupResult = {
 
 export class LookupNetworkError extends Error {}
 
+/** Le thumbnail par défaut de Google Books est en zoom=1 avec un effet de coin corné (edge=curl) —
+ * minuscule et moche. On demande une résolution plus grande et on vire la décoration. */
+function upgradeGoogleCover(url: string): string {
+  return url.replace('zoom=1', 'zoom=3').replace('&edge=curl', '')
+}
+
 const GOOGLE_BOOKS_KEY = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY as string | undefined
 
 /** fetch() n'a pas de timeout par défaut — sans ça, une requête qui traîne bloque la recherche indéfiniment.
  * Lève une erreur sur échec réseau/timeout (distinct d'une réponse HTTP valide sans résultat). */
-async function fetchJson(url: string, timeoutMs = 8000): Promise<any> {
+async function fetchJson(url: string, timeoutMs = 8000, init?: RequestInit): Promise<any> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await fetch(url, { ...init, signal: controller.signal })
     if (!res.ok) {
       console.error('bookLookup HTTP error:', url, res.status, await res.text().catch(() => ''))
       throw new LookupNetworkError(`HTTP ${res.status}`)
@@ -70,7 +76,7 @@ async function lookupByIsbnGoogleBooks(isbn: string): Promise<BookLookupResult |
     language: info.language ?? null,
     categories: info.categories ?? [],
     description: info.description ?? null,
-    cover_url: info.imageLinks?.thumbnail?.replace('http://', 'https://') ?? null,
+    cover_url: info.imageLinks?.thumbnail ? upgradeGoogleCover(info.imageLinks.thumbnail.replace('http://', 'https://')) : null,
     pages: info.pageCount ?? null,
   }
 }
@@ -138,6 +144,151 @@ async function searchGoogleBooks(query: string): Promise<BookLookupResult[]> {
   )
 }
 
+type GoogleImageLinks = { extraLarge?: string; large?: string; medium?: string; small?: string; thumbnail?: string }
+
+/** Le champ `thumbnail` est presque toujours le seul renseigné par l'API recherche, mais quand
+ * une édition a des variantes plus grandes (extraLarge/large/medium), on les préfère : c'est le
+ * but même de ce picker, avoir une meilleure image que celle sauvée à l'ajout. */
+function bestGoogleCovers(links: GoogleImageLinks | undefined): string[] {
+  if (!links) return []
+  const ordered = [links.extraLarge, links.large, links.medium, links.small, links.thumbnail].filter(
+    (u): u is string => !!u,
+  )
+  return ordered.map((u) => upgradeGoogleCover(u.replace('http://', 'https://')))
+}
+
+async function searchGoogleBooksCoversRaw(query: string): Promise<string[]> {
+  const key = GOOGLE_BOOKS_KEY ? `&key=${GOOGLE_BOOKS_KEY}` : ''
+  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40${key}`)
+  return (data?.items ?? []).flatMap((item: { volumeInfo?: { imageLinks?: GoogleImageLinks } }) =>
+    bestGoogleCovers(item.volumeInfo?.imageLinks),
+  )
+}
+
+/** Toutes les couvertures trouvées par les deux sources (pas juste la meilleure) — pour laisser
+ * l'utilisateur choisir, comme le sélecteur de poster de Letterboxd. On interroge aussi le titre
+ * sans le numéro de tome (sans restriction de langue) : un tome isolé d'une série peu connue ne
+ * remonte souvent qu'un seul résultat sinon. */
+async function coversFor(query: string): Promise<string[]> {
+  const [ol, gb] = await Promise.allSettled([searchOpenLibrary(query), searchGoogleBooksCoversRaw(query)])
+  return [
+    ...(ol.status === 'fulfilled' ? ol.value.map((r) => r.cover_url) : []),
+    ...(gb.status === 'fulfilled' ? gb.value : []),
+  ].filter((u): u is string => !!u)
+}
+
+/** L'ISBN identifie une édition précise sans ambiguïté — pas de risque de remonter un autre
+ * tome ou un artbook. On l'utilise en priorité quand il est connu. */
+async function coversForIsbn(isbn: string): Promise<string[]> {
+  const [ol, gb] = await Promise.allSettled([lookupByIsbnOpenLibrary(isbn), searchGoogleBooksCoversRaw(`isbn:${isbn}`)])
+  return [
+    ...(ol.status === 'fulfilled' && ol.value?.cover_url ? [ol.value.cover_url] : []),
+    ...(gb.status === 'fulfilled' ? gb.value : []),
+  ]
+}
+
+/** Recherche stricte d'abord (titre + numéro de tome) : pour une série connue (Radiant, One
+ * Piece...), l'enlever ramène toutes les couvertures de tous les tomes plus des faux positifs
+ * (magazines, artbooks) — inutilisable. On n'élargit sur le titre nu que si la recherche stricte
+ * est trop pauvre (< 4 résultats), typique d'un tome isolé peu indexé. */
+export async function searchCoverCandidates(query: string, isbn?: string | null): Promise<string[]> {
+  const byIsbn = isbn ? await coversForIsbn(isbn) : []
+  if (byIsbn.length > 0) return [...new Set(byIsbn)].slice(0, 16)
+
+  const strict = await coversFor(query)
+  const bareQuery = query.replace(/[-–:]?\s*(tome|vol\.?|volume)\s*\d+/i, '').trim()
+  let all = strict
+  if (new Set(strict).size < 4 && bareQuery && bareQuery !== query) {
+    all = [...strict, ...(await coversFor(bareQuery))]
+  }
+  return [...new Set(all)].slice(0, 16)
+}
+
+const ANILIST_QUERY = `
+  query ($search: String) {
+    Page(perPage: 12) {
+      media(search: $search, type: MANGA) {
+        title { romaji english }
+        coverImage { extraLarge large medium }
+        staff(perPage: 3) { edges { role node { name { full } } } }
+      }
+    }
+  }
+`
+
+type AniListMedia = {
+  title: { romaji?: string; english?: string }
+  coverImage?: { extraLarge?: string; large?: string; medium?: string }
+  staff?: { edges: { role: string; node: { name: { full: string } } }[] }
+}
+
+/** AniList : pas de clé, CORS ouvert, et surtout un vrai signal "manga" garanti (contrairement
+ * aux tags Google Books, souvent vides ou juste "Juvenile Fiction"). Pas d'ISBN par édition
+ * (c'est une base séries/tomes, pas éditions physiques) donc uniquement pour la recherche texte. */
+async function searchAniList(query: string): Promise<BookLookupResult[]> {
+  const data = await fetchJson('https://graphql.anilist.co', 8000, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ query: ANILIST_QUERY, variables: { search: query } }),
+  })
+  const media: AniListMedia[] = data?.data?.Page?.media ?? []
+  return media
+    .map((m) => {
+      const cover = m.coverImage?.extraLarge ?? m.coverImage?.large ?? m.coverImage?.medium ?? null
+      const title = m.title.english ?? m.title.romaji
+      if (!cover || !title) return null
+      const authors = (m.staff?.edges ?? [])
+        .filter((e) => /story|art/i.test(e.role))
+        .map((e) => e.node.name.full)
+      const result: BookLookupResult = {
+        isbn: null,
+        title,
+        authors: [...new Set(authors)],
+        publisher: null,
+        cover_url: cover,
+        categories: ['Manga'],
+        pages: null,
+      }
+      return result
+    })
+    .filter((r): r is BookLookupResult => r !== null)
+}
+
+type ComicVineIssue = {
+  name: string | null
+  issue_number: string | null
+  cover_date: string | null
+  volume?: { name?: string }
+  image?: { super_url?: string; screen_large_url?: string; medium_url?: string }
+}
+
+/** Comic Vine bloque les appels directs depuis un navigateur (pas de CORS) — on passe par un
+ * relais côté serveur (Supabase Edge Function) qui porte la clé API. */
+async function searchComicVine(query: string): Promise<BookLookupResult[]> {
+  const base = import.meta.env.VITE_SUPABASE_URL as string
+  const data = await fetchJson(`${base}/functions/v1/comicvine-search?q=${encodeURIComponent(query)}`)
+  const issues: ComicVineIssue[] = data?.results ?? []
+  return issues
+    .map((issue) => {
+      const cover = issue.image?.super_url ?? issue.image?.screen_large_url ?? issue.image?.medium_url ?? null
+      const series = issue.volume?.name
+      if (!cover || !series) return null
+      const title = issue.name ? `${series} - ${issue.name}` : `${series} #${issue.issue_number ?? '?'}`
+      const result: BookLookupResult = {
+        isbn: null,
+        title,
+        authors: [],
+        publisher: null,
+        publishedDate: issue.cover_date ?? null,
+        cover_url: cover,
+        categories: ['Comics'],
+        pages: null,
+      }
+      return result
+    })
+    .filter((r): r is BookLookupResult => r !== null)
+}
+
 /** Les deux sources sont interrogées en parallèle (pas l'une après l'autre) : une source down
  * ne rajoute pas son propre timeout à l'attente. Open Library est préféré si les deux répondent.
  * Ne lève que si les deux échouent réseau (une des deux qui répond "pas trouvé" suffit). */
@@ -152,9 +303,19 @@ export async function lookupByIsbn(isbn: string): Promise<BookLookupResult | nul
 /** Google Books est préféré ici (contrairement à lookupByIsbn) : son classement par pertinence
  * est bien meilleur qu'OpenLibrary sur une recherche plein-texte (nom d'auteur, titre partiel...). */
 export async function searchByTitle(query: string): Promise<BookLookupResult[]> {
-  const [ol, gb] = await Promise.allSettled([searchOpenLibrary(query), searchGoogleBooks(query)])
-  if (gb.status === 'fulfilled' && gb.value.length > 0) return gb.value
-  if (ol.status === 'fulfilled' && ol.value.length > 0) return ol.value
-  if (ol.status === 'rejected' && gb.status === 'rejected') throw gb.reason
-  return []
+  const [ol, gb, al, cv] = await Promise.allSettled([
+    searchOpenLibrary(query),
+    searchGoogleBooks(query),
+    searchAniList(query),
+    searchComicVine(query),
+  ])
+  const base = gb.status === 'fulfilled' && gb.value.length > 0 ? gb.value : ol.status === 'fulfilled' ? ol.value : []
+  if (base.length === 0 && ol.status === 'rejected' && gb.status === 'rejected') throw gb.reason
+  // AniList et Comic Vine viennent toujours en complément (jamais en remplacement) : signal de
+  // catégorie fiable et couvertures nettes, mais aucune notion d'édition/ISBN comme Google/OL.
+  return [
+    ...base,
+    ...(al.status === 'fulfilled' ? al.value : []),
+    ...(cv.status === 'fulfilled' ? cv.value : []),
+  ]
 }

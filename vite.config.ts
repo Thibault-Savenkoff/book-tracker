@@ -15,8 +15,8 @@ export default defineConfig({
         name: 'BiblioLog',
         short_name: 'BiblioLog',
         description: 'Suivi perso de romans, BD et mangas lus',
-        theme_color: '#0d0d0f',
-        background_color: '#0d0d0f',
+        theme_color: '#14231c',
+        background_color: '#14231c',
         display: 'standalone',
         start_url: '/',
         icons: [

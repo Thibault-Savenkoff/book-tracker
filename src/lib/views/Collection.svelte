@@ -7,17 +7,8 @@
   let books = $state<Book[]>([])
   let loading = $state(true)
   let query = $state('')
-  let filterStatus = $state<'Tout' | 'reading' | 'read' | 'wishlist'>('Tout')
   let filterCategory = $state<string>('Toutes')
-  let view = $state<'list' | 'grid' | 'series'>('grid')
-  let catFilterOpen = $state(false)
-
-  const statuses: { key: 'Tout' | 'reading' | 'read' | 'wishlist'; label: string }[] = [
-    { key: 'Tout', label: 'Tout' },
-    { key: 'reading', label: 'En cours' },
-    { key: 'read', label: 'Lu' },
-    { key: 'wishlist', label: 'Envies' },
-  ]
+  let resultsAsList = $state(false)
   const categories = ['roman', 'bd', 'manga', 'comics', 'autre']
 
   async function load() {
@@ -28,15 +19,15 @@
   }
   load()
 
+  const resultsActive = $derived(query.trim() !== '' || filterCategory !== 'Toutes')
+
   const filtered = $derived(
     books.filter(
       (b) =>
-        (filterStatus === 'Tout' || b.status === filterStatus) &&
         (filterCategory === 'Toutes' || b.category === filterCategory) &&
         (!query.trim() || `${b.title} ${b.authors.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())),
     ),
   )
-  const reading = $derived(books.filter((b) => b.status === 'reading'))
 
   /** "One Piece" et "One Piece " (espace/casse en trop selon la façon dont le livre a été
    * ajouté) doivent former une seule série — on regroupe sur une clé normalisée. */
@@ -45,10 +36,12 @@
   }
 
   /** Regroupe par série (colonne `books.series`, remplie à l'ajout) et déduit les tomes manquants
-   * à partir des numéros trouvés dans le titre : les trous entre le min et le max possédés. */
+   * à partir des numéros trouvés dans le titre : les trous entre le min et le max possédés.
+   * Calculé sur la collection entière (pas le filtre courant) : c'est un état permanent de la
+   * bibliothèque, pas un résultat de recherche. */
   const seriesGroups = $derived.by(() => {
     const map = new Map<string, Book[]>()
-    for (const b of filtered) {
+    for (const b of books) {
       if (!b.series) continue
       const key = normSeries(b.series)
       if (!map.has(key)) map.set(key, [])
@@ -69,20 +62,21 @@
         }
         return { series, owned, missing, cover_url: list.find((b) => b.cover_url)?.cover_url ?? null, category: list[0].category }
       })
+      .filter((g) => g.missing.length > 0)
       .sort((a, b) => a.series.localeCompare(b.series))
   })
 
-  /** Un item affiché en liste/grille : un livre seul, ou une série regroupée sous une seule
-   * carte — affiche "One Piece · 12 tomes" au lieu de 12 lignes identiques "One Piece Tome N". */
+  /** Un item affiché : un livre seul, ou une série regroupée sous une seule carte — affiche
+   * "One Piece · 12 tomes" au lieu de 12 cartes identiques "One Piece Tome N". */
   type DisplayItem =
     | { kind: 'book'; key: string; book: Book }
     | { kind: 'series'; key: string; series: string; count: number; cover_url: string | null; category: string; status: Book['status'] }
 
-  // ponytail: filtered.filter() par série = O(n²), sans conséquence pour une collection perso
-  const displayItems = $derived.by(() => {
+  // ponytail: filtre par série en O(n²) sur la liste déjà filtrée, sans conséquence pour une collection perso
+  function groupDisplay(list: Book[]): DisplayItem[] {
     const items: DisplayItem[] = []
     const seen = new Set<string>()
-    for (const b of filtered) {
+    for (const b of list) {
       if (!b.series) {
         items.push({ kind: 'book', key: b.id, book: b })
         continue
@@ -90,7 +84,7 @@
       const key = normSeries(b.series)
       if (seen.has(key)) continue
       seen.add(key)
-      const group = filtered.filter((x) => x.series && normSeries(x.series) === key)
+      const group = list.filter((x) => x.series && normSeries(x.series) === key)
       if (group.length === 1) {
         items.push({ kind: 'book', key: b.id, book: b })
         continue
@@ -108,463 +102,355 @@
       })
     }
     return items
+  }
+
+  const shelves = $derived.by(() => {
+    if (resultsActive) return []
+    return (['reading', 'read', 'wishlist'] as const).map((status) => ({
+      status,
+      label: status === 'reading' ? 'En cours de lecture' : status === 'read' ? 'Déjà lus' : 'Envie de lire',
+      items: groupDisplay(books.filter((b) => b.status === status)),
+    }))
   })
 
-  async function markFinished(b: Book) {
+  const resultsDisplay = $derived(resultsActive ? groupDisplay(filtered) : [])
+
+  function openItem(item: DisplayItem) {
+    if (item.kind === 'book') currentView.set({ name: 'book', id: item.book.id })
+    else {
+      filterCategory = 'Toutes'
+      query = item.series
+    }
+  }
+
+  async function markFinished(b: Book, e: Event) {
+    e.stopPropagation()
     const date_read = new Date().toISOString().slice(0, 10)
     await supabase.from('books').update({ status: 'read', date_read }).eq('id', b.id)
     books = books.map((x) => (x.id === b.id ? { ...x, status: 'read', date_read } : x))
   }
 
-  async function markReading(b: Book) {
+  async function markReading(b: Book, e: Event) {
+    e.stopPropagation()
     await supabase.from('books').update({ status: 'reading' }).eq('id', b.id)
     books = books.map((x) => (x.id === b.id ? { ...x, status: 'reading' } : x))
-  }
-
-  async function setRating(b: Book, n: number) {
-    await supabase.from('books').update({ rating: n }).eq('id', b.id)
-    books = books.map((x) => (x.id === b.id ? { ...x, rating: n } : x))
-  }
-
-  function stars(rating: number | null) {
-    return [0, 1, 2, 3, 4].map((i) => i < (rating ?? 0))
   }
 
   function signOut() {
     if (confirm('Se déconnecter ?')) supabase.auth.signOut()
   }
+
+  function stampDate(d: string | null): string {
+    if (!d) return ''
+    return new Date(`${d}T00:00:00`)
+      .toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+      .toUpperCase()
+      .replace('.', '')
+  }
 </script>
+
+{#snippet spineCard(item: DisplayItem)}
+  <div class="spine">
+    <div class="cover">
+      <button class="cover-hit" onclick={() => openItem(item)} aria-label={item.kind === 'book' ? item.book.title : item.series}>
+        {#if item.kind === 'book'}
+          {#if item.book.cover_url}
+            <img src={item.book.cover_url} alt={item.book.title} />
+          {:else}
+            <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.book.category]}"><span>{item.book.title}</span></div>
+          {/if}
+        {:else if item.cover_url}
+          <img src={item.cover_url} alt={item.series} />
+        {:else}
+          <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"><span>{item.series}</span></div>
+        {/if}
+      </button>
+      <div class="edge" style="background:{CATEGORY_COLOR[item.kind === 'book' ? item.book.category : item.category]}"></div>
+      {#if item.kind === 'series'}
+        <div class="count-badge">×{item.count}</div>
+      {:else if item.book.status === 'reading'}
+        <button class="quick-action" onclick={(e) => markFinished(item.book, e)} title="Marquer comme lu">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            ><path d="M5 13l4 4L19 7" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
+          >
+        </button>
+      {:else if item.book.status === 'wishlist'}
+        <button class="quick-action" onclick={(e) => markReading(item.book, e)} title="Commencer la lecture">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="var(--accent-ink)" /></svg>
+        </button>
+      {:else if item.book.status === 'read'}
+        <div class="stamp">
+          <span>Lu</span>
+          <span>{stampDate(item.book.date_read)}</span>
+        </div>
+      {/if}
+    </div>
+    <button class="spine-text" onclick={() => openItem(item)}>
+      <div class="spine-title">{item.kind === 'book' ? item.book.title : item.series}</div>
+      <div class="spine-sub">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
+    </button>
+  </div>
+{/snippet}
 
 <div class="page">
   <div class="header">
-    <div class="search-row">
-      <div class="search">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-          ><circle cx="11" cy="11" r="7" stroke="rgba(242,242,245,0.45)" stroke-width="2" /><path
-            d="M21 21l-4.3-4.3"
-            stroke="rgba(242,242,245,0.45)"
-            stroke-width="2"
-            stroke-linecap="round"
-          /></svg
-        >
-        <input placeholder="Rechercher dans ma collection" bind:value={query} />
-      </div>
-      <button class="icon-btn quiet" onclick={signOut} aria-label="Déconnexion">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-          ><path d="M12 8.6a3.4 3.4 0 100 6.8 3.4 3.4 0 000-6.8z" stroke="rgba(242, 242, 245,0.5)" stroke-width="1.7" /><path
-            d="M19.9 12.9v-1.8l-2.1-.4a5.9 5.9 0 00-.6-1.5l1.2-1.8-1.3-1.3-1.8 1.2a5.9 5.9 0 00-1.5-.6L13.4 4.6h-1.8l-.4 2.1a5.9 5.9 0 00-1.5.6L7.9 6.1 6.6 7.4l1.2 1.8a5.9 5.9 0 00-.6 1.5l-2.1.4v1.8l2.1.4a5.9 5.9 0 00.6 1.5l-1.2 1.8 1.3 1.3 1.8-1.2a5.9 5.9 0 001.5.6l.4 2.1h1.8l.4-2.1a5.9 5.9 0 001.5-.6l1.8 1.2 1.3-1.3-1.2-1.8a5.9 5.9 0 00.6-1.5l2.1-.4z"
-            stroke="rgba(242, 242, 245,0.5)"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-          /></svg
-        >
-      </button>
+    <span class="eyebrow">{books.length} livre{books.length > 1 ? 's' : ''} dans ta bibliothèque</span>
+    <h1 class="page-title">Ma collection</h1>
+
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        ><circle cx="11" cy="11" r="7" stroke="var(--ink-faint)" stroke-width="2" /><path
+          d="M21 21l-4.3-4.3"
+          stroke="var(--ink-faint)"
+          stroke-width="2"
+          stroke-linecap="round"
+        /></svg
+      >
+      <input placeholder="Rechercher un titre, un auteur…" bind:value={query} />
     </div>
 
-    <div class="tabs">
-      {#each statuses as s (s.key)}
-        <button class="chip" class:active={filterStatus === s.key} onclick={() => (filterStatus = s.key)}>{s.label}</button>
+    <div class="cat-row">
+      <button class="chip" class:active={filterCategory === 'Toutes'} onclick={() => (filterCategory = 'Toutes')}>Toutes</button>
+      {#each categories as c (c)}
+        <button class="chip" class:active={filterCategory === c} onclick={() => (filterCategory = c)}>{CATEGORY_LABEL[c]}</button>
       {/each}
-      <button class="chip cat-toggle" class:active={filterCategory !== 'Toutes'} onclick={() => (catFilterOpen = !catFilterOpen)}>
-        {filterCategory === 'Toutes' ? 'Catégorie' : CATEGORY_LABEL[filterCategory]} {catFilterOpen ? '▴' : '▾'}
-      </button>
-    </div>
-    {#if catFilterOpen}
-      <div class="tabs cat-tabs">
-        <button class="chip" class:active={filterCategory === 'Toutes'} onclick={() => (filterCategory = 'Toutes')}>Toutes</button>
-        {#each categories as c (c)}
-          <button class="chip" class:active={filterCategory === c} onclick={() => (filterCategory = c)}>{CATEGORY_LABEL[c]}</button>
-        {/each}
-      </div>
-    {/if}
-
-    <div class="stat-row">
-      <div class="stat"><span class="num">{books.length}</span><span class="unit">livre{books.length > 1 ? 's' : ''}</span></div>
-      <div class="view-toggle">
-        <button class:active={view === 'list'} onclick={() => (view = 'list')} aria-label="Vue liste">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            ><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
-          >
-        </button>
-        <button class:active={view === 'grid'} onclick={() => (view = 'grid')} aria-label="Vue grille">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            ><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
-              x="13"
-              y="4"
-              width="7"
-              height="7"
-              rx="1.5"
-              stroke="currentColor"
-              stroke-width="2"
-            /><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
-              x="13"
-              y="13"
-              width="7"
-              height="7"
-              rx="1.5"
-              stroke="currentColor"
-              stroke-width="2"
-            /></svg
-          >
-        </button>
-        <button class:active={view === 'series'} onclick={() => (view = 'series')} aria-label="Vue séries">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            ><path d="M4 4.5c2.7-1.3 5.6-1.3 8.5 0v15c-2.9-1.3-5.8-1.3-8.5 0v-15zM20.5 4.5c-2.7-1.3-5.6-1.3-8.5 0v15c2.9-1.3 5.8-1.3 8.5 0v-15z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" /></svg
-          >
-        </button>
-      </div>
     </div>
   </div>
 
   {#if loading}
     <p class="empty">Chargement…</p>
-  {:else}
-    {#if reading.length > 0 && filterStatus === 'Tout' && !query.trim()}
-      <div class="reading-section">
-        <div class="section-label">En cours de lecture</div>
-        <div class="reading-rail">
-          {#each reading as b (b.id)}
-            <div class="reading-card">
-              <button class="cover-btn" onclick={() => currentView.set({ name: 'book', id: b.id })}>
-                {#if b.cover_url}
-                  <img src={b.cover_url} alt={b.title} />
+  {:else if resultsActive}
+    <div class="results">
+      <div class="results-head">
+        <span class="results-count">{resultsDisplay.length} résultat{resultsDisplay.length > 1 ? 's' : ''}</span>
+        <div class="view-toggle">
+          <button class:active={!resultsAsList} onclick={() => (resultsAsList = false)} aria-label="Vue grille">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              ><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
+                x="13"
+                y="4"
+                width="7"
+                height="7"
+                rx="1.5"
+                stroke="currentColor"
+                stroke-width="2"
+              /><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
+                x="13"
+                y="13"
+                width="7"
+                height="7"
+                rx="1.5"
+                stroke="currentColor"
+                stroke-width="2"
+              /></svg
+            >
+          </button>
+          <button class:active={resultsAsList} onclick={() => (resultsAsList = true)} aria-label="Vue liste">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              ><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
+            >
+          </button>
+        </div>
+      </div>
+      {#if resultsDisplay.length === 0}
+        <div class="empty">
+          <p>Aucun livre ne correspond à cette recherche.</p>
+        </div>
+      {:else if resultsAsList}
+        <div class="list">
+          {#each resultsDisplay as item (item.key)}
+            <button class="row" onclick={() => openItem(item)}>
+              <div class="row-cover">
+                {#if item.kind === 'book'}
+                  {#if item.book.cover_url}<img src={item.book.cover_url} alt={item.book.title} />{:else}<div
+                      class="cover-fallback"
+                      style="background:{CATEGORY_GRADIENT[item.book.category]}"
+                    ></div>{/if}
+                {:else if item.cover_url}
+                  <img src={item.cover_url} alt={item.series} />
                 {:else}
-                  <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[b.category]}"><span>{b.title}</span></div>
+                  <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"></div>
                 {/if}
-                <div class="spine" style="background:{CATEGORY_COLOR[b.category]}"></div>
-              </button>
-              <button class="reading-info" onclick={() => currentView.set({ name: 'book', id: b.id })}>
-                <div class="title">{b.title}</div>
-                <div class="author">{b.authors.join(', ')}</div>
-              </button>
-              <button class="finish-btn" onclick={() => markFinished(b)} title="Marquer comme lu">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  ><path d="M5 13l4 4L19 7" stroke="var(--accent-ink)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" /></svg
-                >
-              </button>
+              </div>
+              <div class="row-mid">
+                <div class="row-title">{item.kind === 'book' ? item.book.title : item.series}</div>
+                <div class="spine-sub">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
+              </div>
+              <svg width="9" height="15" viewBox="0 0 24 24" fill="none"
+                ><path d="M8 4l9 8-9 8" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
+              >
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="grid">
+          {#each resultsDisplay as item (item.key)}
+            {@render spineCard(item)}
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else if books.length === 0}
+    <div class="empty">
+      <p>Ta bibliothèque est vide.</p>
+      <button class="cta" onclick={() => currentView.set({ name: 'add' })}>Ajouter ton premier livre</button>
+    </div>
+  {:else}
+    {#each shelves as shelf (shelf.status)}
+      {#if shelf.items.length > 0}
+        <div class="shelf">
+          <div class="shelf-label">{shelf.label} <span>{shelf.items.length}</span></div>
+          <div class="shelf-row">
+            {#each shelf.items as item (item.key)}
+              {@render spineCard(item)}
+            {/each}
+          </div>
+          <div class="shelf-ledge"></div>
+        </div>
+      {/if}
+    {/each}
+
+    {#if seriesGroups.length > 0}
+      <div class="incomplete">
+        <div class="shelf-label">Séries incomplètes <span>{seriesGroups.length}</span></div>
+        <div class="series-blocks">
+          {#each seriesGroups as g (g.series)}
+            <div class="series-block card">
+              <div class="series-block-title">{g.series}</div>
+              <div class="tome-chip-row">
+                {#each g.missing as n (n)}
+                  <button class="tome-chip" onclick={() => currentView.set({ name: 'add', query: `${g.series} Tome ${n}` })}>T{n} manquant</button>
+                {/each}
+              </div>
             </div>
           {/each}
         </div>
       </div>
     {/if}
-
-    <div class="collection-section">
-      {#if filtered.length === 0}
-        <div class="empty">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
-            ><path
-              d="M4 4.5c2.7-1.3 5.6-1.3 8.5 0v15c-2.9-1.3-5.8-1.3-8.5 0v-15zM20.5 4.5c-2.7-1.3-5.6-1.3-8.5 0v15c2.9-1.3 5.8-1.3 8.5 0v-15z"
-              stroke="rgba(242,242,245,0.28)"
-              stroke-width="1.6"
-              stroke-linejoin="round"
-            /></svg
-          >
-          <p>Aucun livre dans cette sélection.</p>
-        </div>
-      {:else if view === 'list'}
-        <div class="list">
-          {#each displayItems as item (item.key)}
-            {#if item.kind === 'series'}
-              <div
-                class="row"
-                role="button"
-                tabindex="0"
-                onclick={() => (view = 'series')}
-                onkeydown={(e) => e.key === 'Enter' && (view = 'series')}
-              >
-                <div class="row-cover">
-                  {#if item.cover_url}
-                    <img src={item.cover_url} alt={item.series} />
-                  {:else}
-                    <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"><span>{item.series}</span></div>
-                  {/if}
-                  <div class="spine" style="background:{CATEGORY_COLOR[item.category]}"></div>
-                </div>
-                <div class="row-mid">
-                  <div class="row-title">{item.series}</div>
-                  <div class="author">{item.count} tomes</div>
-                  <div class="row-meta">
-                    <span class="status-pill" class:on={item.status === 'reading'}>{STATUS_LABEL[item.status]}</span>
-                  </div>
-                </div>
-                <svg class="chevron" width="9" height="15" viewBox="0 0 24 24" fill="none"
-                  ><path d="M8 4l9 8-9 8" stroke="rgba(242,242,245,0.3)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
-                >
-              </div>
-            {:else}
-              {@const b = item.book}
-              <div
-                class="row"
-                role="button"
-                tabindex="0"
-                onclick={() => currentView.set({ name: 'book', id: b.id })}
-                onkeydown={(e) => e.key === 'Enter' && currentView.set({ name: 'book', id: b.id })}
-              >
-                <div class="row-cover">
-                  {#if b.cover_url}
-                    <img src={b.cover_url} alt={b.title} />
-                  {:else}
-                    <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[b.category]}"><span>{b.title}</span></div>
-                  {/if}
-                  <div class="spine" style="background:{CATEGORY_COLOR[b.category]}"></div>
-                </div>
-                <div class="row-mid">
-                  <div class="row-title">{b.title}</div>
-                  <div class="author">{b.authors.join(', ')}</div>
-                  <div class="row-meta">
-                    <span class="status-pill" class:on={b.status === 'reading'}>{STATUS_LABEL[b.status]}</span>
-                    {#if b.status === 'read'}
-                      <div class="stars" role="group" aria-label="Note">
-                        {#each [1, 2, 3, 4, 5] as n (n)}
-                          <button
-                            type="button"
-                            class="star-btn"
-                            onclick={(e) => { e.stopPropagation(); setRating(b, n) }}
-                            aria-label="{n} étoile{n > 1 ? 's' : ''}"
-                          >
-                            <span class:filled={n <= (b.rating ?? 0)}>★</span>
-                          </button>
-                        {/each}
-                      </div>
-                    {:else if b.rating}
-                      <div class="stars">
-                        {#each stars(b.rating) as filled}
-                          <span class:filled>★</span>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                </div>
-                {#if b.status === 'reading'}
-                  <button class="row-finish" onclick={(e) => { e.stopPropagation(); markFinished(b) }} title="Marquer comme lu" aria-label="Marquer comme lu">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      ><path d="M5 13l4 4L19 7" stroke="var(--accent-ink)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" /></svg
-                    >
-                  </button>
-                {:else if b.status === 'wishlist'}
-                  <button class="row-finish start" onclick={(e) => { e.stopPropagation(); markReading(b) }} title="Commencer la lecture" aria-label="Commencer la lecture">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="var(--accent-ink)" /></svg>
-                  </button>
-                {:else}
-                  <svg class="chevron" width="9" height="15" viewBox="0 0 24 24" fill="none"
-                    ><path d="M8 4l9 8-9 8" stroke="rgba(242,242,245,0.3)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
-                  >
-                {/if}
-              </div>
-            {/if}
-          {/each}
-        </div>
-      {:else if view === 'grid'}
-        <div class="grid">
-          {#each displayItems as item (item.key)}
-            {#if item.kind === 'series'}
-              <button class="card" onclick={() => (view = 'series')}>
-                <div class="cover">
-                  {#if item.cover_url}
-                    <img src={item.cover_url} alt={item.series} />
-                  {:else}
-                    <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"><span>{item.series}</span></div>
-                  {/if}
-                  <div class="spine" style="background:{CATEGORY_COLOR[item.category]}"></div>
-                  <div class="badge count">×{item.count}</div>
-                  {#if item.status === 'reading'}<div class="dot reading"></div>{:else if item.status === 'wishlist'}<div class="dot wishlist"></div>{/if}
-                </div>
-                <div class="card-title">{item.series}</div>
-                <div class="author">{item.count} tomes</div>
-              </button>
-            {:else}
-              {@const b = item.book}
-              <button class="card" onclick={() => currentView.set({ name: 'book', id: b.id })}>
-                <div class="cover">
-                  {#if b.cover_url}
-                    <img src={b.cover_url} alt={b.title} />
-                  {:else}
-                    <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[b.category]}"><span>{b.title}</span></div>
-                  {/if}
-                  <div class="spine" style="background:{CATEGORY_COLOR[b.category]}"></div>
-                  {#if b.status === 'reading'}<div class="dot reading"></div>{:else if b.status === 'wishlist'}<div class="dot wishlist"></div>{/if}
-                </div>
-                <div class="card-title">{b.title}</div>
-                <div class="author">{b.authors.join(', ')}</div>
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {:else if seriesGroups.length === 0}
-        <div class="empty">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
-            ><path
-              d="M4 4.5c2.7-1.3 5.6-1.3 8.5 0v15c-2.9-1.3-5.8-1.3-8.5 0v-15zM20.5 4.5c-2.7-1.3-5.6-1.3-8.5 0v15c2.9-1.3 5.8-1.3 8.5 0v-15z"
-              stroke="rgba(242,242,245,0.28)"
-              stroke-width="1.6"
-              stroke-linejoin="round"
-            /></svg
-          >
-          <p>Aucune série reconnue. Les livres ajoutés un par un via une recherche simple n'ont pas toujours de série associée.</p>
-        </div>
-      {:else}
-        <div class="series-blocks">
-          {#each seriesGroups as g (g.series)}
-            <div class="series-block glass">
-              <div class="series-block-head">
-                <div class="cover mini">
-                  {#if g.cover_url}
-                    <img src={g.cover_url} alt={g.series} />
-                  {:else}
-                    <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[g.category]}"></div>
-                  {/if}
-                </div>
-                <div class="series-block-info">
-                  <div class="series-block-title">{g.series}</div>
-                  <div class="series-block-sub">
-                    {g.owned.length} possédé{g.owned.length > 1 ? 's' : ''}{#if g.missing.length}
-                      · {g.missing.length} manquant{g.missing.length > 1 ? 's' : ''}{/if}
-                  </div>
-                </div>
-              </div>
-              <div class="tome-chip-row">
-                {#each g.owned as o (o.book.id)}
-                  <button class="tome-chip owned" onclick={() => currentView.set({ name: 'book', id: o.book.id })}>{o.volume ? `T${o.volume}` : '?'}</button>
-                {/each}
-                {#each g.missing as n (n)}
-                  <button class="tome-chip missing" onclick={() => currentView.set({ name: 'add', query: `${g.series} Tome ${n}` })} title="Chercher ce tome"
-                    >T{n}</button
-                  >
-                {/each}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
   {/if}
+
+  <button class="signout-link" onclick={signOut}>Se déconnecter</button>
 </div>
 
 <style>
   .page {
-    padding-bottom: 24px;
+    padding: 24px 20px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
   .header {
-    padding: 58px 22px 12px;
-  }
-  .search-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 10px;
   }
-  .icon-btn {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .icon-btn.quiet {
-    background: none;
-    border: none;
+  .header .page-title {
+    margin-top: 2px;
   }
   .search {
-    flex: 1;
     display: flex;
     align-items: center;
     gap: 9px;
     padding: 11px 15px;
     border-radius: 999px;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    border: 1px solid var(--line);
   }
   .search input {
     flex: 1;
     border: none;
     background: none;
     outline: none;
-    color: var(--text);
+    color: var(--ink);
     font-size: 13.5px;
   }
-  .tabs {
+  .cat-row {
     display: flex;
-    gap: 2px;
+    gap: 6px;
     overflow-x: auto;
-    margin-bottom: 4px;
   }
-  .cat-tabs {
-    margin-bottom: 10px;
-  }
-  .cat-tabs .chip {
-    font-size: 11px;
-    padding: 6px 13px;
-  }
-  .cat-toggle {
-    font-size: 11px;
-    padding: 6px 13px;
-    color: var(--text-faint);
-    border: 1px solid var(--glass-border);
-  }
-  .cat-toggle.active {
-    color: var(--accent);
-    border-color: var(--accent);
+  .cat-row .chip {
+    border: 1px solid var(--line);
   }
   .empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
     text-align: center;
-    opacity: 0.55;
-    padding: 2.5rem 1rem;
+    color: var(--ink-faint);
+    padding: 3rem 1rem;
     font-size: 0.9rem;
   }
   .empty p {
     margin: 0;
   }
-  .section-label {
-    padding: 0 22px 10px;
-    font-size: 11px;
+  .cta {
+    padding: 12px 22px;
+    border-radius: 999px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
     font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--text-faint);
+    font-size: 13px;
+  }
+
+  .shelf {
+    position: relative;
+    padding-top: 18px;
+  }
+  .shelf-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
     text-transform: uppercase;
+    margin-bottom: 12px;
   }
-  .reading-section {
-    padding: 6px 0 8px;
+  .shelf-label span {
+    color: var(--ink-faint);
+    font-weight: 600;
   }
-  .reading-rail {
+  .shelf-row {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     overflow-x: auto;
-    padding: 2px 22px 6px;
+    padding: 2px 2px 18px;
   }
-  .reading-card {
+  .shelf-ledge {
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--line-strong) 15%, var(--line-strong) 85%, transparent);
+    margin-bottom: 4px;
+    box-shadow: 0 6px 10px -6px rgba(0, 0, 0, 0.5);
+  }
+
+  .spine {
     flex-shrink: 0;
-    width: 210px;
+    width: 110px;
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-md);
+    flex-direction: column;
   }
-  .cover-btn {
+  .cover {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--paper-alt);
+    box-shadow: var(--shadow-card);
+  }
+  .cover-hit {
+    position: absolute;
+    inset: 0;
     border: none;
     background: none;
     padding: 0;
-    cursor: pointer;
-    position: relative;
-    width: 48px;
-    height: 70px;
-    flex-shrink: 0;
-    overflow: hidden;
-    border-radius: var(--radius-sm);
-    background: var(--bg-alt);
+    width: 100%;
+    height: 100%;
   }
-  .cover-btn img,
-  .row-cover img {
+  .cover-hit img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -582,120 +468,156 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.6) 100%);
+    background: linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
   }
   .cover-fallback span {
     position: relative;
     z-index: 1;
-    padding: 6px;
-    font-size: 10px;
+    padding: 7px;
+    font-size: 10.5px;
     font-weight: 700;
-    line-height: 1.2;
-    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.25;
+    color: #fff;
   }
-  .spine {
+  .edge {
     position: absolute;
     top: 0;
     bottom: 0;
     left: 0;
     width: 3px;
   }
-  .reading-info {
-    border: none;
-    background: none;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-    min-width: 0;
-    flex: 1;
-  }
-  .reading-info .title,
-  .row-title,
-  .card-title {
+  .count-badge {
+    position: absolute;
+    z-index: 2;
+    top: 6px;
+    left: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 9px;
     font-weight: 700;
-    font-size: 13.5px;
-    line-height: 1.28;
-    color: var(--text);
+    padding: 3px 7px;
+    border-radius: 999px;
+    pointer-events: none;
   }
-  .reading-info .title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .stamp {
+    position: absolute;
+    z-index: 2;
+    bottom: 8px;
+    right: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.15;
+    padding: 3px 6px;
+    border: 1.5px solid var(--stamp);
+    border-radius: 6px;
+    color: #7a2c1f;
+    background: #f3efe4;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    transform: rotate(-9deg);
+    pointer-events: none;
   }
-  .card-title {
-    margin-top: 8px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .stamp span:first-child {
+    font-family: var(--font-mono);
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
-  .author {
-    font-size: 11.5px;
-    color: var(--text-faint);
-    margin-top: 3px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .stamp span:last-child {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 600;
   }
-  .finish-btn {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+  .quick-action {
+    position: absolute;
+    z-index: 2;
+    bottom: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--accent);
-    border: none;
+    border: 2px solid var(--paper);
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .collection-section {
+  .spine-text {
+    border: none;
+    background: none;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+  }
+  .spine-title {
+    margin-top: 8px;
+    font-weight: 700;
+    font-size: 12.5px;
+    line-height: 1.3;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .spine-sub {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .results {
     padding-top: 6px;
   }
-  .stat-row {
+  .results-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 0 2px;
+    margin-bottom: 14px;
   }
-  .stat {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-  }
-  .stat .num {
-    font-family: var(--font-display);
-    font-size: 27px;
+  .results-count {
+    font-size: 12px;
     font-weight: 700;
-  }
-  .stat .unit {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--ink-dim);
   }
   .view-toggle {
     display: flex;
     gap: 4px;
   }
   .view-toggle button {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: var(--radius-sm);
     border: none;
     background: none;
-    color: var(--text-faint);
+    color: var(--ink-faint);
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .view-toggle button.active {
-    background: var(--glass-bg);
-    color: var(--text);
+    background: var(--paper-alt);
+    color: var(--accent);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 18px;
+  }
+  .grid .spine {
+    width: auto;
   }
   .list {
     display: flex;
     flex-direction: column;
-    padding: 4px 22px 8px;
   }
   .row {
     border: none;
@@ -707,226 +629,74 @@
     display: flex;
     gap: 13px;
     align-items: center;
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--line);
     width: 100%;
     text-align: left;
   }
   .row-cover {
-    position: relative;
-    width: 50px;
-    height: 74px;
+    width: 46px;
+    height: 68px;
     flex-shrink: 0;
     overflow: hidden;
     border-radius: var(--radius-sm);
-    background: var(--bg-alt);
+    background: var(--paper-alt);
   }
-  .row-cover .spine {
-    width: 3px;
+  .row-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .row-mid {
     flex: 1;
     min-width: 0;
   }
   .row-title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .row-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 6px;
-  }
-  .status-pill {
-    font-size: 10px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--text-faint);
-    border: 1px solid var(--glass-border);
-    border-radius: 999px;
-    padding: 2px 8px;
+    font-size: 13.5px;
+    color: var(--ink);
   }
-  .status-pill.on {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .chevron {
-    flex-shrink: 0;
-  }
-  .row-finish {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .star-btn {
-    background: none;
-    border: none;
-    padding: 2px;
-    line-height: 1;
-  }
-  .stars {
-    display: flex;
-    gap: 1px;
-  }
-  .stars span {
-    color: rgba(242, 242, 245, 0.18);
-    font-size: 10px;
-  }
-  .stars span.filled {
-    color: var(--accent);
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
-    gap: 7px;
-    padding: 6px 14px 8px;
-  }
-  @media (min-width: 900px) {
-    .grid {
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 18px;
-      padding: 6px 0 8px;
-    }
-  }
-  .card {
-    border: none;
-    background: none;
-    padding: 0;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-    font: inherit;
-    color: inherit;
-  }
-  .card .cover {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 2 / 3;
-    border-radius: 4px;
-    overflow: hidden;
-    background: var(--bg-alt);
-  }
-  .card .card-title {
-    font-size: 11.5px;
-    margin-top: 6px;
-  }
-  .card .author {
-    font-size: 10px;
-  }
-  .badge {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: rgba(13, 13, 15, 0.82);
-    color: var(--accent);
-    font-size: 8.5px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    padding: 3px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--accent);
-  }
-  .badge.count {
-    right: auto;
-    left: 5px;
-    background: rgba(13, 13, 15, 0.82);
-    color: var(--text);
-    border-color: var(--glass-border);
-  }
-  .dot {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    z-index: 1;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  }
-  .dot.reading {
-    background: var(--accent);
-    box-shadow: 0 0 0 3px rgba(240, 73, 45, 0.25);
-  }
-  .dot.wishlist {
-    background: none;
-    border: 1.4px solid rgba(242, 242, 245, 0.55);
+
+  .incomplete {
+    margin-top: 22px;
+    padding-top: 4px;
   }
   .series-blocks {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 4px 22px 8px;
   }
   .series-block {
-    padding: 12px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-  }
-  .series-block-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .cover.mini {
-    width: 38px;
-    height: 56px;
-    border-radius: var(--radius-sm);
-    flex-shrink: 0;
-    overflow: hidden;
-    background: var(--bg-alt);
-  }
-  .cover.mini img,
-  .cover.mini .cover-fallback {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .series-block-info {
-    min-width: 0;
+    gap: 8px;
   }
   .series-block-title {
     font-weight: 700;
-    font-size: 14px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .series-block-sub {
-    font-size: 11.5px;
-    color: var(--text-faint);
-    margin-top: 2px;
+    font-size: 13.5px;
   }
   .tome-chip-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 6px;
   }
   .tome-chip {
-    border: none;
-    border-radius: 7px;
-    padding: 5px 9px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-  .tome-chip.owned {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .tome-chip.missing {
+    border: 1px dashed var(--line-strong);
     background: none;
-    border: 1px dashed var(--glass-border);
-    color: var(--text-faint);
+    border-radius: 7px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-faint);
+  }
+
+  .signout-link {
+    align-self: center;
+    margin-top: 36px;
+    border: none;
+    background: none;
+    color: var(--ink-faint);
+    font-size: 12px;
+    text-decoration: underline;
   }
 </style>

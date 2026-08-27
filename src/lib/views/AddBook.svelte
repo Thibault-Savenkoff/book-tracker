@@ -30,15 +30,24 @@
   let scanError = $state<string | null>(null)
   let adding = $state(false)
 
-  /** Devine la catégorie à partir des tags Google Books, sinon d'un indice grossier (série avec
-   * plusieurs tomes -> manga, le cas le plus fréquent ici). Simple pré-remplissage, pas une vérité :
-   * l'utilisateur peut toujours corriger via les chips avant d'ajouter. */
+  // ponytail: éditeurs de manga francophones les plus courants — les tags "categories" de Google
+  // Books (souvent juste "Juvenile Fiction" ou absents) ne suffisent pas à distinguer un manga.
+  const MANGA_PUBLISHERS = [
+    'kana', 'pika', 'kurokawa', 'ki-oon', 'tonkam', 'glénat manga', 'soleil manga',
+    'panini manga', 'ankama', 'akata', 'doki-doki', 'meian', 'mangetsu', 'komikku', 'kazé manga',
+  ]
+
+  /** Devine la catégorie à partir des tags Google Books, de l'éditeur, sinon d'un indice grossier
+   * (série avec plusieurs tomes -> manga, le cas le plus fréquent ici). Simple pré-remplissage,
+   * pas une vérité : l'utilisateur peut toujours corriger via les chips avant d'ajouter. */
   function guessCategory(items: BookLookupResult[]): Category {
     const text = items
       .flatMap((i) => i.categories ?? [])
       .join(' ')
       .toLowerCase()
-    if (text.includes('manga')) return 'manga'
+    const publishers = items.map((i) => (i.publisher ?? '').toLowerCase())
+    if (text.includes('manga') || text.includes('shonen') || text.includes('shojo') || text.includes('seinen')) return 'manga'
+    if (publishers.some((p) => MANGA_PUBLISHERS.some((m) => p.includes(m)))) return 'manga'
     if (text.includes('comic')) return 'comics'
     if (text.includes('bande dessin') || text.includes('graphic novel')) return 'bd'
     if (items.length > 1) return 'manga'
@@ -251,7 +260,7 @@
   <div class="top">
     <button class="back" onclick={() => currentView.set({ name: 'collection' })} aria-label="Retour">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-        ><path d="M15 5l-7 7 7 7" stroke="#f2f2f5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
+        ><path d="M15 5l-7 7 7 7" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
       >
     </button>
     <div class="title">Recherche</div>
@@ -270,7 +279,7 @@
       {#if scanError}<p class="hint error">{scanError}</p>{/if}
       {#if searching}<p class="hint">Recherche du livre…</p>{/if}
       {#if ownedMatch}
-        <div class="owned-card glass">
+        <div class="owned-card card">
           <div class="owned-check">✓</div>
           <div class="mid">
             <div class="rtitle">Tu l'as déjà</div>
@@ -287,7 +296,7 @@
     {:else if seriesView}
       <button class="series-back" onclick={() => (seriesView = null)}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-          ><path d="M15 5l-7 7 7 7" stroke="var(--text-dim)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
+          ><path d="M15 5l-7 7 7 7" stroke="var(--ink-dim)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
         >
         Retour aux résultats
       </button>
@@ -326,11 +335,11 @@
         Ajouter les tomes {Math.min(seriesFrom, seriesTo)} à {Math.max(seriesFrom, seriesTo)}
       </button>
     {:else}
-      <div class="search-box glass">
+      <div class="search-box card">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-          ><circle cx="11" cy="11" r="7" stroke="rgba(242, 242, 245,0.5)" stroke-width="2" /><path
+          ><circle cx="11" cy="11" r="7" stroke="var(--ink-faint)" stroke-width="2" /><path
             d="M21 21l-4.3-4.3"
-            stroke="rgba(242, 242, 245,0.5)"
+            stroke="var(--ink-faint)"
             stroke-width="2"
             stroke-linecap="round"
           /></svg
@@ -340,7 +349,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
             ><path
               d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"
-              stroke="rgba(242, 242, 245,0.65)"
+              stroke="var(--ink-dim)"
               stroke-width="1.8"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -353,7 +362,7 @@
       {#if !searching && !searchError && query.trim() && results.length === 0 && !isbnNotFound && !ownedMatch}<p class="hint">Aucun résultat.</p>{/if}
       {#if isbnNotFound}<p class="hint">Aucun livre trouvé pour cet ISBN.</p>{/if}
       {#if ownedMatch}
-        <div class="owned-card glass">
+        <div class="owned-card card">
           <div class="owned-check">✓</div>
           <div class="mid">
             <div class="rtitle">Tu l'as déjà</div>
@@ -365,7 +374,7 @@
       <div class="results">
         {#each groups as g (g.series)}
           {#if g.items.length > 1}
-            <div class="result glass" role="button" tabindex="0" onclick={() => openSeries(g)} onkeydown={(e) => e.key === 'Enter' && openSeries(g)}>
+            <div class="result card" role="button" tabindex="0" onclick={() => openSeries(g)} onkeydown={(e) => e.key === 'Enter' && openSeries(g)}>
               <div class="cover">
                 {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
               </div>
@@ -374,12 +383,12 @@
                 <div class="rauthor">{g.items.length} tomes trouvés</div>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                ><path d="M9 5l7 7-7 7" stroke="var(--text-faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
+                ><path d="M9 5l7 7-7 7" stroke="var(--ink-faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
               >
             </div>
           {:else}
             {@const r = g.items[0]}
-            <div class="result glass" role="button" tabindex="0" onclick={() => openPreview(r)} onkeydown={(e) => e.key === 'Enter' && openPreview(r)}>
+            <div class="result card" role="button" tabindex="0" onclick={() => openPreview(r)} onkeydown={(e) => e.key === 'Enter' && openPreview(r)}>
               <div class="cover">
                 {#if r.cover_url}<img src={r.cover_url} alt={r.title} />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
               </div>
@@ -411,7 +420,7 @@
 {#if previewItem}
   <div class="preview-backdrop" role="presentation" onclick={() => (previewItem = null)}>
     <div
-      class="preview-card glass"
+      class="preview-card card"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -474,7 +483,7 @@
     }
   }
   .top {
-    padding: 58px 22px 14px;
+    padding: 24px 20px 14px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -483,17 +492,17 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    border: 1px solid var(--line);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
   }
   .title {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-weight: 700;
-    font-size: 22px;
+    font-size: 23px;
   }
   .body {
     padding: 16px 22px 0;
@@ -511,7 +520,7 @@
     border: none;
     background: none;
     outline: none;
-    color: var(--text);
+    color: var(--ink);
     font-size: 14.5px;
     flex: 1;
   }
@@ -520,7 +529,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--paper-alt);
     border: none;
     display: flex;
     align-items: center;
@@ -530,8 +539,8 @@
     padding: 0 20px;
     border-radius: var(--radius-md);
     border: none;
-    background: var(--text);
-    color: var(--bg);
+    background: var(--ink);
+    color: var(--paper);
     font-weight: 700;
     font-size: 13px;
   }
@@ -544,16 +553,18 @@
     padding: 15px;
     border-radius: 18px;
     font-size: 14.5px;
+    background: var(--accent);
+    color: var(--accent-ink);
   }
   .go-btn.secondary {
     margin-top: 8px;
     background: transparent;
-    border: 1px solid var(--glass-border);
-    color: var(--text-dim);
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
   }
   .hint {
     font-size: 13px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
     padding: 4px 2px;
   }
   .hint.error {
@@ -584,7 +595,7 @@
     height: 34px;
     border-radius: 50%;
     background: var(--accent);
-    color: #fff;
+    color: var(--accent-ink);
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -597,7 +608,7 @@
     align-self: flex-start;
     background: none;
     border: none;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     font-size: 12.5px;
     font-weight: 600;
     padding: 4px 2px;
@@ -606,13 +617,13 @@
     padding: 2px 2px 4px;
   }
   .series-title {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-weight: 700;
-    font-size: 19px;
+    font-size: 20px;
   }
   .series-sub {
     font-size: 12px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
     margin-top: 2px;
   }
   .tome-grid {
@@ -636,8 +647,8 @@
     aspect-ratio: 2/3;
     border-radius: 10px;
     overflow: hidden;
-    background: var(--bg-alt);
-    border: 2px solid transparent;
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
   }
   .tome-cover img,
   .tome-cover .fallback {
@@ -648,7 +659,7 @@
   .tome-label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-dim);
+    color: var(--ink-dim);
   }
   .range-row {
     display: flex;
@@ -660,20 +671,20 @@
     flex-direction: column;
     gap: 4px;
     font-size: 11.5px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
   }
   .range-row input {
     padding: 10px 12px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    background: var(--glass-bg);
-    color: var(--text);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
     font-size: 14px;
   }
   .preview-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(36, 26, 18, 0.45);
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -709,17 +720,18 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid var(--glass-border);
-    color: var(--text);
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
+    color: var(--ink);
   }
   .preview-cover {
     width: 96px;
     height: 140px;
     border-radius: 12px;
     overflow: hidden;
-    background: var(--bg-alt);
+    background: var(--paper-alt);
     margin: 0 auto 4px;
+    box-shadow: var(--shadow-card);
   }
   .preview-cover img,
   .preview-cover .fallback {
@@ -728,20 +740,20 @@
     object-fit: cover;
   }
   .preview-title {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     font-weight: 700;
-    font-size: 19px;
+    font-size: 20px;
     text-align: center;
   }
   .preview-subtitle {
     font-size: 13px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     text-align: center;
     margin-top: -6px;
   }
   .preview-authors {
     font-size: 13.5px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     text-align: center;
   }
   .preview-meta {
@@ -750,7 +762,7 @@
     justify-content: center;
     gap: 6px 12px;
     font-size: 11.5px;
-    color: var(--text-faint);
+    color: var(--ink-faint);
   }
   .preview-tags {
     display: flex;
@@ -761,15 +773,15 @@
   .tag {
     padding: 4px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--glass-border);
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
     font-size: 11px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
   }
   .preview-desc {
     font-size: 13px;
     line-height: 1.55;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     max-height: 200px;
     overflow-y: auto;
   }
@@ -779,7 +791,7 @@
     border-radius: 8px;
     flex-shrink: 0;
     overflow: hidden;
-    background: var(--bg-alt);
+    background: var(--paper-alt);
   }
   .cover img,
   .cover .fallback {
@@ -800,16 +812,16 @@
   }
   .rauthor {
     font-size: 12.5px;
-    color: var(--text-dim);
+    color: var(--ink-dim);
     margin-top: 2px;
   }
   .add-btn {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--text);
+    background: var(--ink);
     border: none;
-    color: var(--bg);
+    color: var(--paper);
     font-size: 17px;
     font-weight: 600;
     flex-shrink: 0;
@@ -821,7 +833,7 @@
     justify-content: center;
   }
   .chip-group .chip {
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--line);
     padding: 6px 13px;
     font-size: 12px;
   }
@@ -830,15 +842,15 @@
     width: 100%;
     aspect-ratio: 1;
     border-radius: 24px;
-    background: #0e0f13;
+    background: var(--ink);
     overflow: hidden;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--line);
   }
   .corner {
     position: absolute;
     width: 26px;
     height: 26px;
-    border-color: var(--text);
+    border-color: #fff;
     border-style: solid;
     border-width: 0;
   }
@@ -876,8 +888,8 @@
     right: 24px;
     top: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    box-shadow: 0 0 12px 2px rgba(139, 143, 255, 0.7);
+    background: var(--accent);
+    box-shadow: 0 0 12px 2px rgba(201, 164, 76, 0.7);
     animation: scanline 1.6s linear infinite;
   }
   @keyframes scanline {
@@ -892,9 +904,9 @@
     margin-top: 8px;
     padding: 13px;
     border-radius: var(--radius-md);
-    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border: 1px dashed var(--line-strong);
     background: transparent;
-    color: var(--text-faint);
+    color: var(--ink-faint);
     font-size: 13px;
   }
 </style>
