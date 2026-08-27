@@ -2,7 +2,17 @@
   import { onDestroy } from 'svelte'
   import { supabase } from '../supabase'
   import { currentView } from '../nav'
-  import { searchByTitle, lookupByIsbn, expandAlias, LookupNetworkError, type BookLookupResult, type SearchLatencies } from '../bookLookup'
+  import {
+    searchByTitle,
+    lookupByIsbn,
+    expandAlias,
+    fetchMangaDexCovers,
+    getSeriesVolumeCount,
+    searchCoverCandidates,
+    LookupNetworkError,
+    type BookLookupResult,
+    type SearchLatencies,
+  } from '../bookLookup'
   import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
 
@@ -31,6 +41,11 @@
   let seriesStatus = $state<Status>('wishlist')
   let seriesFrom = $state(1)
   let seriesTo = $state(1)
+  let seriesCovers = $state<Record<number, string>>({})
+  let seriesCoversLoading = $state(false)
+  let volumePicker = $state<number | null>(null)
+  let volumePickerCandidates = $state<string[]>([])
+  let volumePickerLoading = $state(false)
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
@@ -180,17 +195,47 @@
    * série (vérifié : 20 résultats sur 42 tomes réels, non consécutifs) — impossible de s'y fier pour
    * énumérer une série complète. On demande donc une plage de tomes à l'utilisateur et on génère les
    * entrées ; les tomes réellement trouvés dans les résultats récupèrent leur vraie couverture/ISBN. */
-  function openSeries(g: { series: string; items: BookLookupResult[] }) {
+  async function openSeries(g: { series: string; items: BookLookupResult[] }) {
     seriesView = g
     seriesCategory = guessCategory(g.items)
     seriesStatus = 'wishlist'
+    seriesCovers = {}
     const volumes = g.items.map((r) => parseSeriesVolume(r.title).volume).filter((v): v is number => v !== null)
     seriesFrom = 1
     seriesTo = volumes.length ? Math.max(...volumes) : g.items.length
+
+    // Nombre officiel de tomes (AniList) : pré-remplit "Au tome" mieux que le sous-échantillon Google Books.
+    getSeriesVolumeCount(g.series).then((count) => {
+      if (count && seriesView?.series === g.series && seriesTo < count) seriesTo = count
+    })
+    // Couvertures complètes par tome (mangas uniquement) : un seul appel MangaDex plutôt que de
+    // multiplier les recherches Google Books, qui ne renvoient qu'un échantillon incomplet.
+    if (seriesCategory === 'manga') {
+      seriesCoversLoading = true
+      const covers = await fetchMangaDexCovers(g.series)
+      seriesCoversLoading = false
+      if (seriesView?.series === g.series) seriesCovers = covers
+    }
   }
 
   function foundVolume(g: { items: BookLookupResult[] }, n: number): BookLookupResult | null {
     return g.items.find((r) => parseSeriesVolume(r.title).volume === n) ?? null
+  }
+
+  /** Tome resté sans couverture (ni résultat trouvé, ni MangaDex) : recherche ciblée sur ce tome
+   * précis, réutilise le même moteur que le sélecteur de couverture de la fiche livre. */
+  async function pickVolumeCover(n: number) {
+    if (!seriesView) return
+    volumePicker = n
+    volumePickerLoading = true
+    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}`)
+    volumePickerLoading = false
+  }
+
+  function applyVolumeCover(url: string) {
+    if (volumePicker === null) return
+    seriesCovers = { ...seriesCovers, [volumePicker]: url }
+    volumePicker = null
   }
 
   async function addSeriesRange() {
@@ -206,7 +251,7 @@
         title: `${seriesView.series} Tome ${n}`,
         authors: seriesView.items[0].authors,
         publisher: seriesView.items[0].publisher,
-        cover_url: null,
+        cover_url: seriesCovers[n] ?? null,
         pages: null,
       }
       await insertBook(base, userData.user?.id, seriesCategory, seriesStatus, seriesView.series)
@@ -286,7 +331,8 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return
-    if (previewItem) previewItem = null
+    if (volumePicker !== null) volumePicker = null
+    else if (previewItem) previewItem = null
     else if (seriesView) seriesView = null
     else if (scannerOpen) stopScanner()
     else currentView.set({ name: 'collection' })
@@ -394,13 +440,22 @@
           <button type="button" class={chipClass(seriesStatus === s)} onclick={() => (seriesStatus = s as Status)}>{STATUS_LABEL[s]}</button>
         {/each}
       </div>
+      {#if seriesCoversLoading}<p class="text-xs text-slate-400">Récupération des couvertures MangaDex…</p>{/if}
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
         {#each Array.from({ length: Math.max(0, Math.min(seriesTo, seriesFrom + 199) - seriesFrom + 1) }) as _, i (seriesFrom + i)}
           {@const n = seriesFrom + i}
           {@const match = foundVolume(seriesView, n)}
+          {@const cover = match?.cover_url ?? seriesCovers[n]}
           <div class="flex flex-col items-center gap-1.5">
-            <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border">
-              {#if match?.cover_url}<img src={match.cover_url} alt="Tome {n}" class="w-full h-full object-cover" />{:else}{@render coverFallback(`T${n}`)}{/if}
+            <div
+              class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border"
+              class:cursor-pointer={!cover}
+              role="button"
+              tabindex="0"
+              onclick={() => !cover && pickVolumeCover(n)}
+              onkeydown={(e) => e.key === 'Enter' && !cover && pickVolumeCover(n)}
+            >
+              {#if cover}<img src={cover} alt="Tome {n}" class="w-full h-full object-cover" />{:else}{@render coverFallback(`T${n}`)}{/if}
             </div>
             <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">T{n}</div>
           </div>
@@ -613,6 +668,37 @@
       >
         Ajouter à ma bibliothèque
       </button>
+    </div>
+  </div>
+{/if}
+
+{#if volumePicker !== null}
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" role="presentation" onclick={() => (volumePicker = null)}>
+    <div
+      class="w-full sm:max-w-md max-h-[78vh] flex flex-col rounded-t-2xl sm:rounded-2xl p-4 gap-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === 'Escape' && (volumePicker = null)}
+    >
+      <div class="flex items-center justify-between font-serif font-bold text-base text-slate-900 dark:text-white">
+        <span>Couverture — Tome {volumePicker}</span>
+        <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (volumePicker = null)} aria-label="Fermer">✕</button>
+      </div>
+      {#if volumePickerLoading}
+        <p class="text-center text-sm text-slate-400 py-5">Recherche…</p>
+      {:else if volumePickerCandidates.length === 0}
+        <p class="text-center text-sm text-slate-400 py-5">Aucune couverture trouvée pour ce tome.</p>
+      {:else}
+        <div class="grid grid-cols-3 gap-2.5 overflow-y-auto thin-scrollbar">
+          {#each volumePickerCandidates as url (url)}
+            <button class="aspect-[2/3] rounded-lg overflow-hidden border-2 border-transparent bg-light-card dark:bg-app-card" onclick={() => applyVolumeCover(url)}>
+              <img src={url} alt="Option de couverture" loading="lazy" class="w-full h-full object-cover" />
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}

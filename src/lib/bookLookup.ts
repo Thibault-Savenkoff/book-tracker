@@ -264,6 +264,7 @@ const ANILIST_QUERY = `
         title { romaji english }
         coverImage { extraLarge large medium }
         staff(perPage: 3) { edges { role node { name { full } } } }
+        volumes
       }
     }
   }
@@ -273,6 +274,48 @@ type AniListMedia = {
   title: { romaji?: string; english?: string }
   coverImage?: { extraLarge?: string; large?: string; medium?: string }
   staff?: { edges: { role: string; node: { name: { full: string } } }[] }
+  volumes?: number | null
+}
+
+/** AniList connaît le nombre officiel de tomes d'une série (ex: 42 pour My Hero Academia) —
+ * sert à pré-remplir "Au tome" plutôt que de deviner depuis les quelques résultats Google Books. */
+export async function getSeriesVolumeCount(seriesTitle: string): Promise<number | null> {
+  try {
+    const data = await fetchJson('https://graphql.anilist.co', 8000, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query: ANILIST_QUERY, variables: { search: seriesTitle } }),
+    })
+    const media: AniListMedia[] = data?.data?.Page?.media ?? []
+    return media[0]?.volumes ?? null
+  } catch {
+    return null
+  }
+}
+
+export type MangaDexCoverMap = Record<number, string>
+
+/** MangaDex expose gratuitement, sans clé ni CORS, la couverture officielle de chaque tome d'une
+ * série en un seul appel — contrairement à Google Books qui ne renvoie qu'un échantillon partiel
+ * et désordonné (vérifié : 20 résultats sur 42 tomes réels, non consécutifs). Échoue en silence
+ * (renvoie {}) : c'est un complément, pas une dépendance bloquante pour l'écran de série. */
+export async function fetchMangaDexCovers(seriesTitle: string): Promise<MangaDexCoverMap> {
+  try {
+    const search = await fetchJson(`https://api.mangadex.org/manga?title=${encodeURIComponent(seriesTitle)}&limit=1`)
+    const mangaId = search?.data?.[0]?.id
+    if (!mangaId) return {}
+    const covers = await fetchJson(`https://api.mangadex.org/cover?manga[]=${mangaId}&limit=100`)
+    const map: MangaDexCoverMap = {}
+    for (const c of covers?.data ?? []) {
+      const vol = Number(c?.attributes?.volume)
+      const fileName = c?.attributes?.fileName
+      if (!fileName || !Number.isFinite(vol)) continue
+      map[vol] = `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.256.jpg`
+    }
+    return map
+  } catch {
+    return {}
+  }
 }
 
 /** AniList : pas de clé, CORS ouvert, et surtout un vrai signal "manga" garanti (contrairement
