@@ -54,59 +54,63 @@
       acc += c.sharePct
       return `${c.color} ${start}% ${acc}%`
     })
-    if (acc < 100) parts.push(`var(--line) ${acc}% 100%`)
+    if (acc < 100) parts.push(`#e2e8f0 ${acc}% 100%`)
     return `conic-gradient(${parts.join(',')})`
   })
 </script>
 
-<div class="page">
-  <div class="header">
-    <span class="eyebrow">Bilan de lecture</span>
-    <h1 class="page-title">Statistiques</h1>
+<div class="p-4 md:p-8 space-y-6">
+  <div>
+    <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500">Bilan de lecture</span>
+    <h1 class="font-serif text-3xl font-bold text-slate-900 dark:text-white tracking-tight mt-1">Statistiques</h1>
   </div>
 
   {#if loading}
-    <p class="empty">Chargement…</p>
+    <p class="text-center text-slate-400 py-16 text-sm">Chargement…</p>
   {:else}
-    <div class="tiles">
-      <div class="tile big">
-        <span class="label">Livres lus</span>
-        <div class="value">{totalRead}</div>
-        <span class="sub">sur {totalBooks} au total</span>
+    <div class="grid grid-cols-2 gap-3">
+      <div
+        class="row-span-2 rounded-2xl p-5 flex flex-col justify-between bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/25"
+      >
+        <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Livres lus</span>
+        <div class="font-serif text-5xl font-bold text-slate-900 dark:text-white my-3">{totalRead}</div>
+        <span class="text-xs text-slate-400">sur {totalBooks} au total</span>
       </div>
-      <div class="tile card">
-        <div class="value small">{totalPages}</div>
-        <div class="label small">Pages lues</div>
+      <div class="rounded-2xl p-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">
+        <div class="font-serif text-2xl font-bold text-slate-900 dark:text-white">{totalPages}</div>
+        <div class="text-[10.5px] text-slate-400 mt-1">Pages lues</div>
       </div>
-      <div class="tile card">
-        <div class="value small">{avgRating}★</div>
-        <div class="label small">Note moyenne</div>
+      <div class="rounded-2xl p-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">
+        <div class="font-serif text-2xl font-bold text-slate-900 dark:text-white">{avgRating}★</div>
+        <div class="text-[10.5px] text-slate-400 mt-1">Note moyenne</div>
       </div>
     </div>
 
-    <div class="panel card">
-      <div class="panel-title">Lectures par mois</div>
-      <div class="bars">
+    <div class="rounded-2xl p-5 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">
+      <div class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-4">Lectures par mois</div>
+      <div class="flex items-end gap-2 h-24">
         {#each months() as m (m.label)}
-          <div class="bar-col">
-            <div class="bar" style="height:{m.pct}%"></div>
-            <span>{m.label}</span>
+          <div class="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+            <div class="w-full rounded-t bg-indigo-500" style="height:{m.pct}%"></div>
+            <span class="text-[9.5px] text-slate-400">{m.label}</span>
           </div>
         {/each}
       </div>
     </div>
 
     {#if categoryStats.length > 0}
-      <div class="panel card donut-panel">
-        <div class="donut" style="background:{donutConic()}">
-          <div class="donut-hole">{totalBooks}</div>
+      <div class="rounded-2xl p-5 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border flex items-center gap-5">
+        <div class="relative w-24 h-24 rounded-full flex-shrink-0" style="background:{donutConic()}">
+          <div class="absolute inset-[15px] rounded-full bg-light-surface dark:bg-app-surface flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+            {totalBooks}
+          </div>
         </div>
-        <div class="legend">
+        <div class="flex-1 flex flex-col gap-2">
           {#each categoryStats as c (c.label)}
-            <div class="legend-row">
-              <span class="dot" style="background:{c.color}"></span>
-              <span class="legend-label">{c.label}</span>
-              <span class="legend-count">{c.count}</span>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:{c.color}"></span>
+              <span class="text-xs text-slate-700 dark:text-slate-200 flex-1">{c.label}</span>
+              <span class="text-xs text-slate-400">{c.count}</span>
             </div>
           {/each}
         </div>
@@ -114,155 +118,3 @@
     {/if}
   {/if}
 </div>
-
-<style>
-  .page {
-    padding-bottom: 24px;
-  }
-  .header {
-    padding: 24px 20px 16px;
-  }
-  .header .page-title {
-    margin-top: 4px;
-  }
-  .empty {
-    text-align: center;
-    color: var(--ink-faint);
-    padding: 2rem 1rem;
-  }
-  .tiles {
-    display: grid;
-    grid-template-columns: 1.3fr 1fr;
-    grid-template-rows: auto auto;
-    gap: 12px;
-    padding: 8px 22px 18px;
-  }
-  .tile.big {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-    background: linear-gradient(160deg, var(--accent-tint), transparent);
-    border: 1px solid rgba(201, 164, 76, 0.28);
-    border-radius: 22px;
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .tile.big .value {
-    font-family: var(--font-display);
-    font-size: 52px;
-    font-weight: 700;
-    color: var(--ink);
-    line-height: 1;
-    margin: 14px 0;
-  }
-  .tile.big .label {
-    font-size: 11px;
-    color: var(--accent-strong);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 700;
-  }
-  .tile.big .sub {
-    font-size: 11.5px;
-    color: var(--ink-faint);
-  }
-  .tile:not(.big) {
-    padding: 14px 16px;
-  }
-  .value.small {
-    font-family: var(--font-display);
-    font-size: 23px;
-    font-weight: 700;
-    color: var(--ink);
-  }
-  .label.small {
-    font-size: 10.5px;
-    color: var(--ink-faint);
-    margin-top: 3px;
-  }
-  .panel {
-    margin: 0 22px 18px;
-    padding: 20px;
-  }
-  .panel-title {
-    font-size: 13px;
-    color: var(--ink-dim);
-    margin-bottom: 16px;
-    font-weight: 600;
-  }
-  .bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    height: 100px;
-  }
-  .bar-col {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    height: 100%;
-    justify-content: flex-end;
-  }
-  .bar {
-    width: 100%;
-    border-radius: 5px 5px 0 0;
-    background: var(--accent);
-  }
-  .bar-col span {
-    font-size: 9.5px;
-    color: var(--ink-faint);
-  }
-  .donut-panel {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-  .donut {
-    position: relative;
-    width: 96px;
-    height: 96px;
-    flex-shrink: 0;
-    border-radius: 50%;
-  }
-  .donut-hole {
-    position: absolute;
-    inset: 15px;
-    border-radius: 50%;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    color: var(--ink-dim);
-    font-weight: 700;
-  }
-  .legend {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-  }
-  .legend-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .legend-label {
-    font-size: 12.5px;
-    color: var(--ink);
-    flex: 1;
-  }
-  .legend-count {
-    font-size: 12px;
-    color: var(--ink-faint);
-  }
-</style>

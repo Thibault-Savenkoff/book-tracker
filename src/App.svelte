@@ -11,44 +11,30 @@
 </script>
 
 {#if $authLoading}
-  <p class="loading">Chargement…</p>
+  <div class="h-dvh flex items-center justify-center bg-light-bg dark:bg-app-bg">
+    <p class="font-serif italic text-slate-400">Chargement…</p>
+  </div>
 {:else if !$session}
   <Login />
 {:else}
-  <div class="app">
+  <div class="h-dvh w-full flex flex-col md:flex-row overflow-hidden bg-light-bg dark:bg-app-bg transition-colors">
     <TopNav active={$currentView.name} />
-    <main>
-      {#if $currentView.name === 'collection'}
-        <Collection />
-      {:else if $currentView.name === 'planning'}
-        <Planning />
-      {:else if $currentView.name === 'stats'}
-        <Stats />
-      {:else if $currentView.name === 'add'}
-        <AddBook initialQuery={$currentView.query} />
-      {:else if $currentView.name === 'book'}
-        <BookDetail id={$currentView.id} />
-      {/if}
+    <main class="flex-1 flex flex-col overflow-hidden">
+      <div class="flex-1 overflow-y-auto thin-scrollbar pb-20 md:pb-0">
+        <div class="max-w-5xl mx-auto w-full">
+          {#if $currentView.name === 'collection'}
+            <Collection />
+          {:else if $currentView.name === 'planning'}
+            <Planning />
+          {:else if $currentView.name === 'stats'}
+            <Stats />
+          {:else if $currentView.name === 'add'}
+            <AddBook initialQuery={$currentView.query} />
+          {:else if $currentView.name === 'book'}
+            <BookDetail id={$currentView.id} />
+          {/if}
+        </div>
+      </div>
     </main>
   </div>
 {/if}
-
-<style>
-  .app {
-    min-height: 100dvh;
-  }
-  main {
-    max-width: 760px;
-    margin: 0 auto;
-    width: 100%;
-  }
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100dvh;
-    color: var(--ink-faint);
-    font-family: var(--font-display);
-    font-style: italic;
-  }
-</style>

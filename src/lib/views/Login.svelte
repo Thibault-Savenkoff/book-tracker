@@ -19,26 +19,49 @@
   }
 </script>
 
-<div class="page">
-  <div class="login">
-    <div class="hero">
-      <span class="eyebrow">Carnet de lecture</span>
-      <h1 class="wordmark">Biblio<span>Log</span></h1>
-      <p class="tagline">Romans, BD, mangas, comics — toute ta bibliothèque, notée et commentée.</p>
+<div class="min-h-dvh flex items-center justify-center px-6 py-10 bg-light-bg dark:bg-app-bg transition-colors">
+  <div class="w-full max-w-sm flex flex-col gap-9">
+    <div>
+      <span class="text-[11px] font-mono uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Carnet de lecture</span>
+      <h1 class="font-serif text-6xl leading-none tracking-tight text-slate-900 dark:text-white mt-4">
+        Biblio<span class="italic text-indigo-600 dark:text-indigo-400">Log</span>
+      </h1>
+      <p class="mt-5 text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-[260px]">
+        Romans, BD, mangas, comics — toute ta bibliothèque, notée et commentée.
+      </p>
     </div>
 
     {#if sent}
-      <p class="sent">Lien envoyé à <strong>{email}</strong>, vérifie ta boîte mail.</p>
+      <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        Lien envoyé à <strong class="text-slate-900 dark:text-white">{email}</strong>, vérifie ta boîte mail.
+      </p>
     {:else}
-      <form onsubmit={(e) => { e.preventDefault(); sendMagicLink() }}>
-        <label class="field">
-          <span>Email</span>
-          <input type="email" placeholder="ton@email.com" bind:value={email} required />
+      <form
+        class="flex flex-col gap-5"
+        onsubmit={(e) => {
+          e.preventDefault()
+          sendMagicLink()
+        }}
+      >
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Email</span>
+          <input
+            type="email"
+            placeholder="ton@email.com"
+            bind:value={email}
+            required
+            class="py-3 border-0 border-b-[1.5px] border-slate-300 dark:border-white/15 bg-transparent outline-none text-slate-900 dark:text-white text-base focus:border-indigo-500 transition-colors"
+          />
         </label>
-        <button type="submit">Accéder à ma collection<span aria-hidden="true">→</span></button>
-        {#if error}<p class="error">{error}</p>{/if}
+        <button
+          type="submit"
+          class="flex items-center justify-center gap-2 w-full py-4 rounded-xl border-none bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/30"
+        >
+          Accéder à ma collection<span aria-hidden="true">→</span>
+        </button>
+        {#if error}<p class="text-red-500 text-sm">{error}</p>{/if}
       </form>
-      <div class="install-hint">
+      <div class="flex items-center gap-2.5 px-1 text-slate-400">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
           ><path d="M12 3v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><path
             d="M7 8l5-5 5 5"
@@ -48,120 +71,8 @@
             stroke-linejoin="round"
           /><rect x="5" y="14" width="14" height="7" rx="2" stroke="currentColor" stroke-width="2" /></svg
         >
-        <span>Installe BiblioLog sur ton écran d'accueil.</span>
+        <span class="text-[11.5px] leading-tight">Installe BiblioLog sur ton écran d'accueil.</span>
       </div>
     {/if}
   </div>
 </div>
-
-<style>
-  .page {
-    min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 26px;
-    background:
-      radial-gradient(60% 50% at 15% 0%, var(--paper-alt), transparent 70%),
-      var(--paper);
-  }
-  .login {
-    width: 100%;
-    max-width: 380px;
-    display: flex;
-    flex-direction: column;
-    gap: 36px;
-  }
-  .hero {
-    display: flex;
-    flex-direction: column;
-  }
-  .hero .eyebrow {
-    margin-bottom: 16px;
-  }
-  .wordmark {
-    margin: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 54px;
-    line-height: 0.98;
-    letter-spacing: -0.01em;
-    color: var(--ink);
-  }
-  .wordmark span {
-    font-style: italic;
-    color: var(--accent);
-    font-weight: 500;
-  }
-  .tagline {
-    margin-top: 20px;
-    font-size: 14.5px;
-    color: var(--ink-dim);
-    line-height: 1.6;
-    max-width: 260px;
-  }
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .field span {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-faint);
-  }
-  .field input {
-    padding: 12px 2px;
-    border: none;
-    border-bottom: 1.5px solid var(--line-strong);
-    background: none;
-    outline: none;
-    color: var(--ink);
-    font-size: 16px;
-  }
-  .field input:focus {
-    border-bottom-color: var(--accent);
-  }
-  button[type='submit'] {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    padding: 16px;
-    border-radius: var(--radius-lg);
-    border: none;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-    font-size: 15px;
-    box-shadow: 0 12px 24px -8px rgba(201, 164, 76, 0.35);
-  }
-  .install-hint {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 2px 4px;
-    color: var(--ink-faint);
-  }
-  .install-hint span {
-    font-size: 11.5px;
-    line-height: 1.4;
-  }
-  .sent {
-    font-size: 14.5px;
-    color: var(--ink-dim);
-    line-height: 1.6;
-  }
-  .error {
-    color: var(--danger);
-    font-size: 13px;
-  }
-</style>

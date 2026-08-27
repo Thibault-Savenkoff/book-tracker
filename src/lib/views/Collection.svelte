@@ -1,7 +1,7 @@
 <script lang="ts">
   import { supabase, type Book } from '../supabase'
   import { currentView } from '../nav'
-  import { CATEGORY_LABEL, CATEGORY_COLOR, CATEGORY_GRADIENT, STATUS_LABEL } from '../bookStyle'
+  import { CATEGORY_LABEL, CATEGORY_COLOR, CATEGORY_GRADIENT, CATEGORY_BADGE_CLASS, CATEGORY_DOT_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
 
   let books = $state<Book[]>([])
@@ -9,6 +9,7 @@
   let query = $state('')
   let filterCategory = $state<string>('Toutes')
   let resultsAsList = $state(false)
+  let quickView = $state<Book | null>(null)
   const categories = ['roman', 'bd', 'manga', 'comics', 'autre']
 
   async function load() {
@@ -115,8 +116,9 @@
 
   const resultsDisplay = $derived(resultsActive ? groupDisplay(filtered) : [])
 
+  /** Un livre ouvre le volet d'aperçu rapide ; une série filtre directement la collection sur son nom. */
   function openItem(item: DisplayItem) {
-    if (item.kind === 'book') currentView.set({ name: 'book', id: item.book.id })
+    if (item.kind === 'book') quickView = item.book
     else {
       filterCategory = 'Toutes'
       query = item.series
@@ -128,12 +130,14 @@
     const date_read = new Date().toISOString().slice(0, 10)
     await supabase.from('books').update({ status: 'read', date_read }).eq('id', b.id)
     books = books.map((x) => (x.id === b.id ? { ...x, status: 'read', date_read } : x))
+    if (quickView?.id === b.id) quickView = { ...quickView, status: 'read', date_read }
   }
 
   async function markReading(b: Book, e: Event) {
     e.stopPropagation()
     await supabase.from('books').update({ status: 'reading' }).eq('id', b.id)
     books = books.map((x) => (x.id === b.id ? { ...x, status: 'reading' } : x))
+    if (quickView?.id === b.id) quickView = { ...quickView, status: 'reading' }
   }
 
   function signOut() {
@@ -147,179 +151,218 @@
       .toUpperCase()
       .replace('.', '')
   }
+
+  function chipClass(active: boolean) {
+    return active
+      ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
+      : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+  }
 </script>
 
-{#snippet spineCard(item: DisplayItem)}
-  <div class="spine">
-    <div class="cover">
-      <button class="cover-hit" onclick={() => openItem(item)} aria-label={item.kind === 'book' ? item.book.title : item.series}>
+{#snippet bookCard(item: DisplayItem)}
+  <div class="group flex flex-col cursor-pointer w-full">
+    <div
+      class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1"
+    >
+      <button class="absolute inset-0 w-full h-full" onclick={() => openItem(item)} aria-label={item.kind === 'book' ? item.book.title : item.series}>
         {#if item.kind === 'book'}
           {#if item.book.cover_url}
-            <img src={item.book.cover_url} alt={item.book.title} />
+            <img src={item.book.cover_url} alt={item.book.title} class="w-full h-full object-cover" />
           {:else}
-            <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.book.category]}"><span>{item.book.title}</span></div>
+            <div class="w-full h-full flex items-end p-2" style="background:{CATEGORY_GRADIENT[item.book.category]}">
+              <span class="relative z-10 text-[11px] font-semibold leading-tight text-white">{item.book.title}</span>
+            </div>
           {/if}
         {:else if item.cover_url}
-          <img src={item.cover_url} alt={item.series} />
+          <img src={item.cover_url} alt={item.series} class="w-full h-full object-cover" />
         {:else}
-          <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"><span>{item.series}</span></div>
+          <div class="w-full h-full flex items-end p-2" style="background:{CATEGORY_GRADIENT[item.category]}">
+            <span class="relative z-10 text-[11px] font-semibold leading-tight text-white">{item.series}</span>
+          </div>
         {/if}
       </button>
-      <div class="edge" style="background:{CATEGORY_COLOR[item.kind === 'book' ? item.book.category : item.category]}"></div>
+
       {#if item.kind === 'series'}
-        <div class="count-badge">×{item.count}</div>
+        <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/60 text-white pointer-events-none">×{item.count}</span>
       {:else if item.book.status === 'reading'}
-        <button class="quick-action" onclick={(e) => markFinished(item.book, e)} title="Marquer comme lu">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-            ><path d="M5 13l4 4L19 7" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
-          >
+        <button
+          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"
+          onclick={(e) => markFinished(item.book, e)}
+          title="Marquer comme lu"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
       {:else if item.book.status === 'wishlist'}
-        <button class="quick-action" onclick={(e) => markReading(item.book, e)} title="Commencer la lecture">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="var(--accent-ink)" /></svg>
+        <button
+          class="absolute z-10 bottom-2 right-2 w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md"
+          onclick={(e) => markReading(item.book, e)}
+          title="Commencer la lecture"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 4l14 8-14 8V4z" fill="currentColor" /></svg>
         </button>
       {:else if item.book.status === 'read'}
-        <div class="stamp">
-          <span>Lu</span>
-          <span>{stampDate(item.book.date_read)}</span>
-        </div>
+        <span
+          class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 pointer-events-none"
+        >
+          LU · {stampDate(item.book.date_read)}
+        </span>
       {/if}
     </div>
-    <button class="spine-text" onclick={() => openItem(item)}>
-      <div class="spine-title">{item.kind === 'book' ? item.book.title : item.series}</div>
-      <div class="spine-sub">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
+    <button class="text-left w-full" onclick={() => openItem(item)}>
+      <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+        {item.kind === 'book' ? item.book.title : item.series}
+      </h4>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+        {item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}
+      </p>
     </button>
   </div>
 {/snippet}
 
-<div class="page">
-  <div class="header">
-    <span class="eyebrow">{books.length} livre{books.length > 1 ? 's' : ''} dans ta bibliothèque</span>
-    <h1 class="page-title">Ma collection</h1>
-
-    <div class="search">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-        ><circle cx="11" cy="11" r="7" stroke="var(--ink-faint)" stroke-width="2" /><path
-          d="M21 21l-4.3-4.3"
-          stroke="var(--ink-faint)"
-          stroke-width="2"
-          stroke-linecap="round"
-        /></svg
+<div class="p-4 md:p-8 space-y-8">
+  <div class="flex flex-col gap-4">
+    <div>
+      <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500"
+        >{books.length} livre{books.length > 1 ? 's' : ''} dans ta bibliothèque</span
       >
-      <input placeholder="Rechercher un titre, un auteur…" bind:value={query} />
+      <h1 class="font-serif text-3xl font-bold text-slate-900 dark:text-white tracking-tight mt-1">Ma collection</h1>
     </div>
 
-    <div class="cat-row">
-      <button class="chip" class:active={filterCategory === 'Toutes'} onclick={() => (filterCategory = 'Toutes')}>Toutes</button>
+    <div class="relative max-w-md">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+        ><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" /><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
+      >
+      <input
+        placeholder="Rechercher un titre, un auteur…"
+        bind:value={query}
+        class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border focus:border-indigo-500 rounded-lg pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none transition"
+      />
+    </div>
+
+    <div class="flex gap-2 overflow-x-auto pb-1">
+      <button class={chipClass(filterCategory === 'Toutes')} onclick={() => (filterCategory = 'Toutes')}>Toutes</button>
       {#each categories as c (c)}
-        <button class="chip" class:active={filterCategory === c} onclick={() => (filterCategory = c)}>{CATEGORY_LABEL[c]}</button>
+        <button class={chipClass(filterCategory === c)} onclick={() => (filterCategory = c)}>{CATEGORY_LABEL[c]}</button>
       {/each}
     </div>
   </div>
 
   {#if loading}
-    <p class="empty">Chargement…</p>
+    <p class="text-center text-slate-400 py-16 text-sm">Chargement…</p>
   {:else if resultsActive}
-    <div class="results">
-      <div class="results-head">
-        <span class="results-count">{resultsDisplay.length} résultat{resultsDisplay.length > 1 ? 's' : ''}</span>
-        <div class="view-toggle">
-          <button class:active={!resultsAsList} onclick={() => (resultsAsList = false)} aria-label="Vue grille">
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <span class="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">{resultsDisplay.length} résultat{resultsDisplay.length > 1 ? 's' : ''}</span>
+        <div class="flex gap-1">
+          <button
+            class={`w-8 h-8 rounded-lg flex items-center justify-center ${!resultsAsList ? 'bg-slate-100 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
+            onclick={() => (resultsAsList = false)}
+            aria-label="Vue grille"
+          >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              ><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
-                x="13"
-                y="4"
-                width="7"
-                height="7"
-                rx="1.5"
-                stroke="currentColor"
-                stroke-width="2"
-              /><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
-                x="13"
+              ><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /><rect
+                x="4"
                 y="13"
                 width="7"
                 height="7"
                 rx="1.5"
                 stroke="currentColor"
                 stroke-width="2"
-              /></svg
+              /><rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" /></svg
             >
           </button>
-          <button class:active={resultsAsList} onclick={() => (resultsAsList = true)} aria-label="Vue liste">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-              ><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
-            >
+          <button
+            class={`w-8 h-8 rounded-lg flex items-center justify-center ${resultsAsList ? 'bg-slate-100 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
+            onclick={() => (resultsAsList = true)}
+            aria-label="Vue liste"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
           </button>
         </div>
       </div>
       {#if resultsDisplay.length === 0}
-        <div class="empty">
-          <p>Aucun livre ne correspond à cette recherche.</p>
-        </div>
+        <p class="text-center text-slate-400 py-16 text-sm">Aucun livre ne correspond à cette recherche.</p>
       {:else if resultsAsList}
-        <div class="list">
+        <div class="flex flex-col divide-y divide-light-border dark:divide-app-border">
           {#each resultsDisplay as item (item.key)}
-            <button class="row" onclick={() => openItem(item)}>
-              <div class="row-cover">
+            <button class="flex items-center gap-3 py-3 text-left" onclick={() => openItem(item)}>
+              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
                 {#if item.kind === 'book'}
-                  {#if item.book.cover_url}<img src={item.book.cover_url} alt={item.book.title} />{:else}<div
-                      class="cover-fallback"
+                  {#if item.book.cover_url}<img src={item.book.cover_url} alt={item.book.title} class="w-full h-full object-cover" />{:else}<div
+                      class="w-full h-full"
                       style="background:{CATEGORY_GRADIENT[item.book.category]}"
                     ></div>{/if}
                 {:else if item.cover_url}
-                  <img src={item.cover_url} alt={item.series} />
+                  <img src={item.cover_url} alt={item.series} class="w-full h-full object-cover" />
                 {:else}
-                  <div class="cover-fallback" style="background:{CATEGORY_GRADIENT[item.category]}"></div>
+                  <div class="w-full h-full" style="background:{CATEGORY_GRADIENT[item.category]}"></div>
                 {/if}
               </div>
-              <div class="row-mid">
-                <div class="row-title">{item.kind === 'book' ? item.book.title : item.series}</div>
-                <div class="spine-sub">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.kind === 'book' ? item.book.title : item.series}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{item.kind === 'book' ? item.book.authors.join(', ') : `${item.count} tomes`}</div>
               </div>
-              <svg width="9" height="15" viewBox="0 0 24 24" fill="none"
-                ><path d="M8 4l9 8-9 8" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
+              <svg width="9" height="15" viewBox="0 0 24 24" fill="none" class="text-slate-400 flex-shrink-0"
+                ><path d="M8 4l9 8-9 8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg
               >
             </button>
           {/each}
         </div>
       {:else}
-        <div class="grid">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
           {#each resultsDisplay as item (item.key)}
-            {@render spineCard(item)}
+            {@render bookCard(item)}
           {/each}
         </div>
       {/if}
     </div>
   {:else if books.length === 0}
-    <div class="empty">
+    <div class="flex flex-col items-center gap-4 text-center py-16 text-slate-400">
       <p>Ta bibliothèque est vide.</p>
-      <button class="cta" onclick={() => currentView.set({ name: 'add' })}>Ajouter ton premier livre</button>
+      <button class="px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold" onclick={() => currentView.set({ name: 'add' })}
+        >Ajouter ton premier livre</button
+      >
     </div>
   {:else}
-    {#each shelves as shelf (shelf.status)}
-      {#if shelf.items.length > 0}
-        <div class="shelf">
-          <div class="shelf-label">{shelf.label} <span>{shelf.items.length}</span></div>
-          <div class="shelf-row">
-            {#each shelf.items as item (item.key)}
-              {@render spineCard(item)}
-            {/each}
+    <div class="space-y-8">
+      {#each shelves as shelf (shelf.status)}
+        {#if shelf.items.length > 0}
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                {#if shelf.status === 'reading'}<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>{/if}
+                <h2 class="font-serif text-xl font-bold text-slate-900 dark:text-white">{shelf.label}</h2>
+              </div>
+              <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{shelf.items.length}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
+              {#each shelf.items as item (item.key)}
+                {@render bookCard(item)}
+              {/each}
+            </div>
           </div>
-          <div class="shelf-ledge"></div>
-        </div>
-      {/if}
-    {/each}
+        {/if}
+      {/each}
+    </div>
 
     {#if seriesGroups.length > 0}
-      <div class="incomplete">
-        <div class="shelf-label">Séries incomplètes <span>{seriesGroups.length}</span></div>
-        <div class="series-blocks">
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-serif text-xl font-bold text-slate-900 dark:text-white">Séries incomplètes</h2>
+          <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{seriesGroups.length}</span>
+        </div>
+        <div class="flex flex-col gap-3">
           {#each seriesGroups as g (g.series)}
-            <div class="series-block card">
-              <div class="series-block-title">{g.series}</div>
-              <div class="tome-chip-row">
+            <div class="p-4 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border flex flex-col gap-2">
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{g.series}</div>
+              <div class="flex flex-wrap gap-2">
                 {#each g.missing as n (n)}
-                  <button class="tome-chip" onclick={() => currentView.set({ name: 'add', query: `${g.series} Tome ${n}` })}>T{n} manquant</button>
+                  <button
+                    class="px-3 py-1.5 rounded-lg border border-dashed border-light-border dark:border-app-border text-xs font-mono text-slate-500 dark:text-slate-400 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                    onclick={() => currentView.set({ name: 'add', query: `${g.series} Tome ${n}` })}
+                  >
+                    T{n} manquant
+                  </button>
                 {/each}
               </div>
             </div>
@@ -329,374 +372,70 @@
     {/if}
   {/if}
 
-  <button class="signout-link" onclick={signOut}>Se déconnecter</button>
+  <button class="block mx-auto mt-6 text-xs text-slate-400 dark:text-slate-500 underline" onclick={signOut}>Se déconnecter</button>
 </div>
 
-<style>
-  .page {
-    padding: 24px 20px 48px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .header {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    margin-bottom: 10px;
-  }
-  .header .page-title {
-    margin-top: 2px;
-  }
-  .search {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 11px 15px;
-    border-radius: 999px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-  }
-  .search input {
-    flex: 1;
-    border: none;
-    background: none;
-    outline: none;
-    color: var(--ink);
-    font-size: 13.5px;
-  }
-  .cat-row {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-  }
-  .cat-row .chip {
-    border: 1px solid var(--line);
-  }
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    text-align: center;
-    color: var(--ink-faint);
-    padding: 3rem 1rem;
-    font-size: 0.9rem;
-  }
-  .empty p {
-    margin: 0;
-  }
-  .cta {
-    padding: 12px 22px;
-    border-radius: 999px;
-    border: none;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-    font-size: 13px;
-  }
+{#if quickView}
+  {@const b = quickView}
+  <div
+    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-20"
+    role="presentation"
+    onclick={() => (quickView = null)}
+  ></div>
+  <aside class="fixed inset-y-0 right-0 w-full sm:w-96 bg-light-surface dark:bg-app-surface border-l border-light-border dark:border-app-border shadow-2xl z-30 flex flex-col">
+    <div class="h-16 px-6 border-b border-light-border dark:border-app-border flex items-center justify-between flex-shrink-0">
+      <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Aperçu rapide</span>
+      <button class="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (quickView = null)} aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto thin-scrollbar p-6 space-y-6">
+      <div class="flex flex-col items-center text-center">
+        <div class="w-32 aspect-[2/3] rounded-lg overflow-hidden cover-shadow border border-light-border dark:border-app-border mb-4 bg-light-card dark:bg-app-card">
+          {#if b.cover_url}
+            <img src={b.cover_url} alt={b.title} class="w-full h-full object-cover" />
+          {:else}
+            <div class="w-full h-full" style="background:{CATEGORY_GRADIENT[b.category]}"></div>
+          {/if}
+        </div>
+        <span class={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border mb-1 ${CATEGORY_BADGE_CLASS[b.category]}`}>{CATEGORY_LABEL[b.category].toUpperCase()}</span>
+        <h3 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">{b.title}</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400">{b.authors.join(', ')}</p>
+      </div>
 
-  .shelf {
-    position: relative;
-    padding-top: 18px;
-  }
-  .shelf-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    color: var(--ink-dim);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-  }
-  .shelf-label span {
-    color: var(--ink-faint);
-    font-weight: 600;
-  }
-  .shelf-row {
-    display: flex;
-    gap: 16px;
-    overflow-x: auto;
-    padding: 2px 2px 18px;
-  }
-  .shelf-ledge {
-    height: 3px;
-    background: linear-gradient(90deg, transparent, var(--line-strong) 15%, var(--line-strong) 85%, transparent);
-    margin-bottom: 4px;
-    box-shadow: 0 6px 10px -6px rgba(0, 0, 0, 0.5);
-  }
+      <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-between text-xs font-mono">
+        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <span class={`w-2 h-2 rounded-full ${CATEGORY_DOT_CLASS[b.category]}`}></span>
+          {STATUS_LABEL[b.status]}
+        </span>
+        {#if b.status === 'read' && b.date_read}
+          <span class="text-slate-900 dark:text-white font-semibold">Lu le {stampDate(b.date_read)}</span>
+        {/if}
+      </div>
 
-  .spine {
-    flex-shrink: 0;
-    width: 110px;
-    display: flex;
-    flex-direction: column;
-  }
-  .cover {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 2 / 3;
-    border-radius: 5px;
-    overflow: hidden;
-    background: var(--paper-alt);
-    box-shadow: var(--shadow-card);
-  }
-  .cover-hit {
-    position: absolute;
-    inset: 0;
-    border: none;
-    background: none;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-  }
-  .cover-hit img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .cover-fallback {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: flex-end;
-  }
-  .cover-fallback::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.55) 100%);
-  }
-  .cover-fallback span {
-    position: relative;
-    z-index: 1;
-    padding: 7px;
-    font-size: 10.5px;
-    font-weight: 700;
-    line-height: 1.25;
-    color: #fff;
-  }
-  .edge {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 3px;
-  }
-  .count-badge {
-    position: absolute;
-    z-index: 2;
-    top: 6px;
-    left: 6px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 3px 7px;
-    border-radius: 999px;
-    pointer-events: none;
-  }
-  .stamp {
-    position: absolute;
-    z-index: 2;
-    bottom: 8px;
-    right: 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    line-height: 1.15;
-    padding: 3px 6px;
-    border: 1.5px solid var(--stamp);
-    border-radius: 6px;
-    color: #7a2c1f;
-    background: #f3efe4;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-    transform: rotate(-9deg);
-    pointer-events: none;
-  }
-  .stamp span:first-child {
-    font-family: var(--font-mono);
-    font-size: 7.5px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .stamp span:last-child {
-    font-family: var(--font-mono);
-    font-size: 8px;
-    font-weight: 600;
-  }
-  .quick-action {
-    position: absolute;
-    z-index: 2;
-    bottom: 6px;
-    right: 6px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--paper);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .spine-text {
-    border: none;
-    background: none;
-    padding: 0;
-    text-align: left;
-    font: inherit;
-    color: inherit;
-    width: 100%;
-  }
-  .spine-title {
-    margin-top: 8px;
-    font-weight: 700;
-    font-size: 12.5px;
-    line-height: 1.3;
-    color: var(--ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .spine-sub {
-    font-size: 11px;
-    color: var(--ink-faint);
-    margin-top: 2px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .results {
-    padding-top: 6px;
-  }
-  .results-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 14px;
-  }
-  .results-count {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--ink-dim);
-  }
-  .view-toggle {
-    display: flex;
-    gap: 4px;
-  }
-  .view-toggle button {
-    width: 30px;
-    height: 30px;
-    border-radius: var(--radius-sm);
-    border: none;
-    background: none;
-    color: var(--ink-faint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .view-toggle button.active {
-    background: var(--paper-alt);
-    color: var(--accent);
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-    gap: 18px;
-  }
-  .grid .spine {
-    width: auto;
-  }
-  .list {
-    display: flex;
-    flex-direction: column;
-  }
-  .row {
-    border: none;
-    background: none;
-    padding: 11px 0;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    display: flex;
-    gap: 13px;
-    align-items: center;
-    border-bottom: 1px solid var(--line);
-    width: 100%;
-    text-align: left;
-  }
-  .row-cover {
-    width: 46px;
-    height: 68px;
-    flex-shrink: 0;
-    overflow: hidden;
-    border-radius: var(--radius-sm);
-    background: var(--paper-alt);
-  }
-  .row-cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .row-mid {
-    flex: 1;
-    min-width: 0;
-  }
-  .row-title {
-    font-weight: 700;
-    font-size: 13.5px;
-    color: var(--ink);
-  }
-
-  .incomplete {
-    margin-top: 22px;
-    padding-top: 4px;
-  }
-  .series-blocks {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .series-block {
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .series-block-title {
-    font-weight: 700;
-    font-size: 13.5px;
-  }
-  .tome-chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .tome-chip {
-    border: 1px dashed var(--line-strong);
-    background: none;
-    border-radius: 7px;
-    padding: 5px 10px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--ink-faint);
-  }
-
-  .signout-link {
-    align-self: center;
-    margin-top: 36px;
-    border: none;
-    background: none;
-    color: var(--ink-faint);
-    font-size: 12px;
-    text-decoration: underline;
-  }
-</style>
+      <div class="space-y-2">
+        <button
+          class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition"
+          onclick={() => currentView.set({ name: 'book', id: b.id })}
+        >
+          Ouvrir la fiche complète
+        </button>
+        {#if b.status === 'reading'}
+          <button
+            class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition"
+            onclick={(e) => markFinished(b, e)}
+          >
+            Marquer comme terminé
+          </button>
+        {:else if b.status === 'wishlist'}
+          <button
+            class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition"
+            onclick={(e) => markReading(b, e)}
+          >
+            Commencer la lecture
+          </button>
+        {/if}
+      </div>
+    </div>
+  </aside>
+{/if}

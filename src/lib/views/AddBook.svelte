@@ -254,102 +254,135 @@
   onDestroy(stopScanner)
 
   if (seedQuery) runSearch()
+
+  function chipClass(active: boolean) {
+    return active
+      ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
+      : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5'
+  }
 </script>
 
-<div class="page">
-  <div class="top">
-    <button class="back" onclick={() => currentView.set({ name: 'collection' })} aria-label="Retour">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-        ><path d="M15 5l-7 7 7 7" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
+<div class="pb-10 md:max-w-3xl md:mx-auto">
+  <div class="p-4 md:p-8 space-y-6">
+    <div class="flex items-center gap-3">
+      <button
+        class="w-9 h-9 rounded-lg bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border flex items-center justify-center flex-shrink-0"
+        onclick={() => currentView.set({ name: 'collection' })}
+        aria-label="Retour"
       >
-    </button>
-    <div class="title">Recherche</div>
-  </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+      <h1 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">Recherche fédérée</h1>
+    </div>
 
-  <div class="body">
     {#if scannerOpen}
-      <div class="scan-frame">
-        <div id="scanner"></div>
-        <div class="corner tl"></div>
-        <div class="corner tr"></div>
-        <div class="corner bl"></div>
-        <div class="corner br"></div>
+      <div class="relative w-full aspect-square rounded-3xl bg-black overflow-hidden border border-light-border dark:border-app-border">
+        <div id="scanner" class="w-full h-full"></div>
+        <div class="scan-corner scan-corner-tl"></div>
+        <div class="scan-corner scan-corner-tr"></div>
+        <div class="scan-corner scan-corner-bl"></div>
+        <div class="scan-corner scan-corner-br"></div>
         {#if scanState === 'scanning'}<div class="scanline"></div>{/if}
       </div>
-      {#if scanError}<p class="hint error">{scanError}</p>{/if}
-      {#if searching}<p class="hint">Recherche du livre…</p>{/if}
+      {#if scanError}<p class="text-sm text-red-500">{scanError}</p>{/if}
+      {#if searching}<p class="text-sm text-slate-400">Recherche du livre…</p>{/if}
       {#if ownedMatch}
-        <div class="owned-card card">
-          <div class="owned-check">✓</div>
-          <div class="mid">
-            <div class="rtitle">Tu l'as déjà</div>
-            <div class="rauthor">{ownedMatch.title} — {STATUS_LABEL[ownedMatch.status]}</div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-indigo-500/40">
+          <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold flex-shrink-0">✓</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-slate-900 dark:text-white">Tu l'as déjà</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{ownedMatch.title} — {STATUS_LABEL[ownedMatch.status]}</div>
           </div>
         </div>
-        <button class="go-btn wide" onclick={() => currentView.set({ name: 'book', id: ownedMatch!.id })}>Voir la fiche</button>
-        <button class="go-btn wide secondary" onclick={scanAgain}>Scanner un autre livre</button>
-      {:else if isbnNotFound}
-        <p class="hint">Aucun livre trouvé pour ce code-barre.</p>
-        <button class="go-btn wide" onclick={scanAgain}>Scanner un autre livre</button>
-      {/if}
-      <button class="go-btn wide secondary" onclick={stopScanner}>Fermer le scanner</button>
-    {:else if seriesView}
-      <button class="series-back" onclick={() => (seriesView = null)}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-          ><path d="M15 5l-7 7 7 7" stroke="var(--ink-dim)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
+        <button class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold" onclick={() => currentView.set({ name: 'book', id: ownedMatch!.id })}
+          >Voir la fiche</button
         >
+        <button class="w-full py-3 rounded-xl border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-sm font-medium" onclick={scanAgain}
+          >Scanner un autre livre</button
+        >
+      {:else if isbnNotFound}
+        <p class="text-sm text-slate-400">Aucun livre trouvé pour ce code-barre.</p>
+        <button class="w-full py-3 rounded-xl border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-sm font-medium" onclick={scanAgain}
+          >Scanner un autre livre</button
+        >
+      {/if}
+      <button class="w-full py-3 rounded-xl border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-sm font-medium" onclick={stopScanner}
+        >Fermer le scanner</button
+      >
+    {:else if seriesView}
+      <button class="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400" onclick={() => (seriesView = null)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
         Retour aux résultats
       </button>
-      <div class="series-title-row">
-        <div class="series-title">{seriesView.series}</div>
-        <div class="series-sub">{seriesView.items[0].authors.join(', ')}</div>
+      <div>
+        <div class="font-serif text-xl font-bold text-slate-900 dark:text-white">{seriesView.series}</div>
+        <div class="text-xs text-slate-400 mt-0.5">{seriesView.items[0].authors.join(', ')}</div>
       </div>
-      <p class="hint">Google ne connaît pas la liste complète des tomes d'une série — indique la plage que tu possèdes, les couvertures des tomes trouvés seront utilisées automatiquement.</p>
-      <div class="range-row">
-        <label>Du tome<input type="number" min="1" bind:value={seriesFrom} /></label>
-        <label>Au tome<input type="number" min="1" bind:value={seriesTo} /></label>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Google ne connaît pas la liste complète des tomes d'une série — indique la plage que tu possèdes, les couvertures des tomes trouvés seront utilisées automatiquement.
+      </p>
+      <div class="flex gap-3">
+        <label class="flex-1 flex flex-col gap-1 text-[11px] text-slate-400">
+          Du tome
+          <input type="number" min="1" bind:value={seriesFrom} class="px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white" />
+        </label>
+        <label class="flex-1 flex flex-col gap-1 text-[11px] text-slate-400">
+          Au tome
+          <input type="number" min="1" bind:value={seriesTo} class="px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white" />
+        </label>
       </div>
-      <div class="chip-group">
+      <div class="flex flex-wrap gap-2 justify-center">
         {#each Object.keys(CATEGORY_LABEL) as c (c)}
-          <button type="button" class="chip" class:active={seriesCategory === c} onclick={() => (seriesCategory = c as Category)}>{CATEGORY_LABEL[c]}</button>
+          <button type="button" class={chipClass(seriesCategory === c)} onclick={() => (seriesCategory = c as Category)}>{CATEGORY_LABEL[c]}</button>
         {/each}
       </div>
-      <div class="chip-group">
+      <div class="flex flex-wrap gap-2 justify-center">
         {#each Object.keys(STATUS_LABEL) as s (s)}
-          <button type="button" class="chip" class:active={seriesStatus === s} onclick={() => (seriesStatus = s as Status)}>{STATUS_LABEL[s]}</button>
+          <button type="button" class={chipClass(seriesStatus === s)} onclick={() => (seriesStatus = s as Status)}>{STATUS_LABEL[s]}</button>
         {/each}
       </div>
-      <div class="tome-grid">
+      <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
         {#each Array.from({ length: Math.max(0, Math.min(seriesTo, seriesFrom + 199) - seriesFrom + 1) }) as _, i (seriesFrom + i)}
           {@const n = seriesFrom + i}
           {@const match = foundVolume(seriesView, n)}
-          <div class="tome-cell">
-            <div class="tome-cover">
-              {#if match?.cover_url}<img src={match.cover_url} alt="Tome {n}" />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT[seriesCategory]}"></div>{/if}
+          <div class="flex flex-col items-center gap-1.5">
+            <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border">
+              {#if match?.cover_url}<img src={match.cover_url} alt="Tome {n}" class="w-full h-full object-cover" />{:else}<div
+                  class="w-full h-full"
+                  style="background:{CATEGORY_GRADIENT[seriesCategory]}"
+                ></div>{/if}
             </div>
-            <div class="tome-label">T{n}</div>
+            <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">T{n}</div>
           </div>
         {/each}
       </div>
-      <button class="go-btn wide" onclick={addSeriesRange} disabled={adding || seriesTo < seriesFrom}>
+      <button
+        class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50"
+        onclick={addSeriesRange}
+        disabled={adding || seriesTo < seriesFrom}
+      >
         Ajouter les tomes {Math.min(seriesFrom, seriesTo)} à {Math.max(seriesFrom, seriesTo)}
       </button>
     {:else}
-      <div class="search-box card">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-          ><circle cx="11" cy="11" r="7" stroke="var(--ink-faint)" stroke-width="2" /><path
-            d="M21 21l-4.3-4.3"
-            stroke="var(--ink-faint)"
-            stroke-width="2"
-            stroke-linecap="round"
-          /></svg
+      <div class="flex items-center gap-2 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="text-indigo-600 dark:text-indigo-400 flex-shrink-0"
+          ><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" /><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
         >
-        <input placeholder="Titre, auteur ou ISBN" bind:value={query} onkeydown={(e) => e.key === 'Enter' && runSearch()} />
-        <button class="scan-btn" onclick={openScanner} aria-label="Scanner un code-barre">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+        <input
+          placeholder="Titre, auteur ou ISBN"
+          bind:value={query}
+          onkeydown={(e) => e.key === 'Enter' && runSearch()}
+          class="flex-1 bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400"
+        />
+        <button
+          class="w-8 h-8 rounded-full bg-light-card dark:bg-app-card flex items-center justify-center flex-shrink-0 text-slate-500 dark:text-slate-400"
+          onclick={openScanner}
+          aria-label="Scanner un code-barre"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
             ><path
               d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"
-              stroke="var(--ink-dim)"
+              stroke="currentColor"
               stroke-width="1.8"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -357,47 +390,62 @@
           >
         </button>
       </div>
-      {#if searching}<p class="hint">Recherche…</p>{/if}
-      {#if searchError}<p class="hint error">{searchError}</p>{/if}
-      {#if !searching && !searchError && query.trim() && results.length === 0 && !isbnNotFound && !ownedMatch}<p class="hint">Aucun résultat.</p>{/if}
-      {#if isbnNotFound}<p class="hint">Aucun livre trouvé pour cet ISBN.</p>{/if}
+      {#if searching}<p class="text-sm text-slate-400">Recherche…</p>{/if}
+      {#if searchError}<p class="text-sm text-red-500">{searchError}</p>{/if}
+      {#if !searching && !searchError && query.trim() && results.length === 0 && !isbnNotFound && !ownedMatch}<p class="text-sm text-slate-400">Aucun résultat.</p>{/if}
+      {#if isbnNotFound}<p class="text-sm text-slate-400">Aucun livre trouvé pour cet ISBN.</p>{/if}
       {#if ownedMatch}
-        <div class="owned-card card">
-          <div class="owned-check">✓</div>
-          <div class="mid">
-            <div class="rtitle">Tu l'as déjà</div>
-            <div class="rauthor">{ownedMatch.title} — {STATUS_LABEL[ownedMatch.status]}</div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-indigo-500/40">
+          <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold flex-shrink-0">✓</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-slate-900 dark:text-white">Tu l'as déjà</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{ownedMatch.title} — {STATUS_LABEL[ownedMatch.status]}</div>
           </div>
-          <button class="go-btn small" onclick={() => currentView.set({ name: 'book', id: ownedMatch!.id })}>Voir</button>
+          <button class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold flex-shrink-0" onclick={() => currentView.set({ name: 'book', id: ownedMatch!.id })}>Voir</button>
         </div>
       {/if}
-      <div class="results">
+      <div class="flex flex-col gap-2">
         {#each groups as g (g.series)}
           {#if g.items.length > 1}
-            <div class="result card" role="button" tabindex="0" onclick={() => openSeries(g)} onkeydown={(e) => e.key === 'Enter' && openSeries(g)}>
-              <div class="cover">
-                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
+            <div
+              class="flex items-center gap-3 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cursor-pointer"
+              role="button"
+              tabindex="0"
+              onclick={() => openSeries(g)}
+              onkeydown={(e) => e.key === 'Enter' && openSeries(g)}
+            >
+              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
+                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} class="w-full h-full object-cover" />{:else}<div
+                    class="w-full h-full"
+                    style="background:{CATEGORY_GRADIENT.roman}"
+                  ></div>{/if}
               </div>
-              <div class="mid">
-                <div class="rtitle">{g.series}</div>
-                <div class="rauthor">{g.items.length} tomes trouvés</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{g.series}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">{g.items.length} tomes trouvés</div>
               </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                ><path d="M9 5l7 7-7 7" stroke="var(--ink-faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="text-slate-400 flex-shrink-0"
+                ><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
               >
             </div>
           {:else}
             {@const r = g.items[0]}
-            <div class="result card" role="button" tabindex="0" onclick={() => openPreview(r)} onkeydown={(e) => e.key === 'Enter' && openPreview(r)}>
-              <div class="cover">
-                {#if r.cover_url}<img src={r.cover_url} alt={r.title} />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
+            <div
+              class="flex items-center gap-3 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cursor-pointer"
+              role="button"
+              tabindex="0"
+              onclick={() => openPreview(r)}
+              onkeydown={(e) => e.key === 'Enter' && openPreview(r)}
+            >
+              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
+                {#if r.cover_url}<img src={r.cover_url} alt={r.title} class="w-full h-full object-cover" />{:else}<div class="w-full h-full" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
               </div>
-              <div class="mid">
-                <div class="rtitle">{r.title}</div>
-                <div class="rauthor">{r.authors.join(', ')}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{r.title}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{r.authors.join(', ')}</div>
               </div>
               <button
-                class="add-btn"
+                class="w-8 h-8 rounded-full bg-indigo-600 text-white text-lg font-semibold flex items-center justify-center flex-shrink-0 disabled:opacity-50"
                 onclick={(e) => {
                   e.stopPropagation()
                   const pv = parseSeriesVolume(r.title)
@@ -412,29 +460,40 @@
           {/if}
         {/each}
       </div>
-      <button class="manual" onclick={addManual}>+ Saisir un livre manuellement</button>
+      <button class="w-full py-3.5 rounded-xl border border-dashed border-light-border dark:border-app-border text-slate-400 text-sm" onclick={addManual}
+        >+ Saisir un livre manuellement</button
+      >
     {/if}
   </div>
 </div>
 
 {#if previewItem}
-  <div class="preview-backdrop" role="presentation" onclick={() => (previewItem = null)}>
+  <div class="fixed inset-0 z-40 bg-black/50 flex items-end sm:items-center justify-center" role="presentation" onclick={() => (previewItem = null)}>
     <div
-      class="preview-card card"
+      class="relative w-full sm:max-w-md max-h-[88vh] overflow-y-auto thin-scrollbar p-6 pt-8 rounded-t-3xl sm:rounded-2xl flex flex-col gap-3 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.key === 'Escape' && (previewItem = null)}
     >
-      <button class="preview-close" onclick={() => (previewItem = null)} aria-label="Fermer">✕</button>
-      <div class="preview-cover">
-        {#if previewItem.cover_url}<img src={previewItem.cover_url} alt={previewItem.title} />{:else}<div class="fallback" style="background:{CATEGORY_GRADIENT[previewCategory]}"></div>{/if}
+      <button
+        class="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border text-slate-500 dark:text-slate-300"
+        onclick={() => (previewItem = null)}
+        aria-label="Fermer"
+      >
+        ✕
+      </button>
+      <div class="w-24 h-36 rounded-xl overflow-hidden bg-light-card dark:bg-app-card mx-auto mb-1 cover-shadow">
+        {#if previewItem.cover_url}<img src={previewItem.cover_url} alt={previewItem.title} class="w-full h-full object-cover" />{:else}<div
+            class="w-full h-full"
+            style="background:{CATEGORY_GRADIENT[previewCategory]}"
+          ></div>{/if}
       </div>
-      <div class="preview-title">{previewItem.title}</div>
-      {#if previewItem.subtitle}<div class="preview-subtitle">{previewItem.subtitle}</div>{/if}
-      {#if previewItem.authors.length}<div class="preview-authors">{previewItem.authors.join(', ')}</div>{/if}
-      <div class="preview-meta">
+      <div class="font-serif text-xl font-bold text-slate-900 dark:text-white text-center">{previewItem.title}</div>
+      {#if previewItem.subtitle}<div class="text-sm text-slate-500 dark:text-slate-400 text-center -mt-1.5">{previewItem.subtitle}</div>{/if}
+      {#if previewItem.authors.length}<div class="text-sm text-slate-500 dark:text-slate-400 text-center">{previewItem.authors.join(', ')}</div>{/if}
+      <div class="flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
         {#if previewItem.publisher}<span>{previewItem.publisher}</span>{/if}
         {#if previewItem.publishedDate}<span>{previewItem.publishedDate}</span>{/if}
         {#if previewItem.language}<span>{previewItem.language.toUpperCase()}</span>{/if}
@@ -442,23 +501,23 @@
         {#if previewItem.isbn}<span>ISBN {previewItem.isbn}</span>{/if}
       </div>
       {#if previewItem.categories?.length}
-        <div class="preview-tags">
-          {#each previewItem.categories as c (c)}<span class="tag">{c}</span>{/each}
+        <div class="flex flex-wrap justify-center gap-1.5">
+          {#each previewItem.categories as c (c)}<span class="px-2.5 py-1 rounded-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border text-[11px] text-slate-500 dark:text-slate-400">{c}</span>{/each}
         </div>
       {/if}
-      {#if previewItem.description}<p class="preview-desc">{previewItem.description}</p>{/if}
-      <div class="chip-group">
+      {#if previewItem.description}<p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400 max-h-48 overflow-y-auto thin-scrollbar">{previewItem.description}</p>{/if}
+      <div class="flex flex-wrap gap-2 justify-center">
         {#each Object.keys(CATEGORY_LABEL) as c (c)}
-          <button type="button" class="chip" class:active={previewCategory === c} onclick={() => (previewCategory = c as Category)}>{CATEGORY_LABEL[c]}</button>
+          <button type="button" class={chipClass(previewCategory === c)} onclick={() => (previewCategory = c as Category)}>{CATEGORY_LABEL[c]}</button>
         {/each}
       </div>
-      <div class="chip-group">
+      <div class="flex flex-wrap gap-2 justify-center">
         {#each Object.keys(STATUS_LABEL) as s (s)}
-          <button type="button" class="chip" class:active={previewStatus === s} onclick={() => (previewStatus = s as Status)}>{STATUS_LABEL[s]}</button>
+          <button type="button" class={chipClass(previewStatus === s)} onclick={() => (previewStatus = s as Status)}>{STATUS_LABEL[s]}</button>
         {/each}
       </div>
       <button
-        class="go-btn wide"
+        class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50"
         onclick={() => {
           const pv = parseSeriesVolume(previewItem!.title)
           addBook(previewItem as BookLookupResult, previewCategory, previewStatus, pv.volume ? pv.series : null)
@@ -473,380 +532,7 @@
 {/if}
 
 <style>
-  .page {
-    padding-bottom: 40px;
-  }
-  @media (min-width: 900px) {
-    .page {
-      max-width: 640px;
-      margin: 0 auto;
-    }
-  }
-  .top {
-    padding: 24px 20px 14px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .back {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 23px;
-  }
-  .body {
-    padding: 16px 22px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .search-box {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 12px 12px 12px 15px;
-  }
-  .search-box input {
-    border: none;
-    background: none;
-    outline: none;
-    color: var(--ink);
-    font-size: 14.5px;
-    flex: 1;
-  }
-  .scan-btn {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--paper-alt);
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .go-btn {
-    padding: 0 20px;
-    border-radius: var(--radius-md);
-    border: none;
-    background: var(--ink);
-    color: var(--paper);
-    font-weight: 700;
-    font-size: 13px;
-  }
-  .go-btn.small {
-    padding: 9px 15px;
-    font-size: 12.5px;
-  }
-  .go-btn.wide {
-    width: 100%;
-    padding: 15px;
-    border-radius: 18px;
-    font-size: 14.5px;
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-  .go-btn.secondary {
-    margin-top: 8px;
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--ink-dim);
-  }
-  .hint {
-    font-size: 13px;
-    color: var(--ink-faint);
-    padding: 4px 2px;
-  }
-  .hint.error {
-    color: var(--danger);
-  }
-  .results {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .result {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 10px;
-    cursor: pointer;
-  }
-  .owned-card {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 12px;
-    border-color: var(--accent);
-  }
-  .owned-check {
-    flex-shrink: 0;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .series-back {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    align-self: flex-start;
-    background: none;
-    border: none;
-    color: var(--ink-dim);
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 4px 2px;
-  }
-  .series-title-row {
-    padding: 2px 2px 4px;
-  }
-  .series-title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 20px;
-  }
-  .series-sub {
-    font-size: 12px;
-    color: var(--ink-faint);
-    margin-top: 2px;
-  }
-  .tome-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 14px;
-    padding-bottom: 12px;
-  }
-  .tome-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    padding: 0;
-  }
-  .tome-cover {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 2/3;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--paper-alt);
-    border: 1px solid var(--line);
-  }
-  .tome-cover img,
-  .tome-cover .fallback {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .tome-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-dim);
-  }
-  .range-row {
-    display: flex;
-    gap: 12px;
-  }
-  .range-row label {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11.5px;
-    color: var(--ink-faint);
-  }
-  .range-row input {
-    padding: 10px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--ink);
-    font-size: 14px;
-  }
-  .preview-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(36, 26, 18, 0.45);
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    z-index: 50;
-  }
-  @media (min-width: 900px) {
-    .preview-backdrop {
-      align-items: center;
-    }
-  }
-  .preview-card {
-    position: relative;
-    width: 100%;
-    max-width: 440px;
-    max-height: 88vh;
-    overflow-y: auto;
-    padding: 26px 22px 22px;
-    border-radius: 24px 24px 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  @media (min-width: 900px) {
-    .preview-card {
-      border-radius: var(--radius-lg);
-      max-height: 80vh;
-    }
-  }
-  .preview-close {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--paper-alt);
-    border: 1px solid var(--line);
-    color: var(--ink);
-  }
-  .preview-cover {
-    width: 96px;
-    height: 140px;
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--paper-alt);
-    margin: 0 auto 4px;
-    box-shadow: var(--shadow-card);
-  }
-  .preview-cover img,
-  .preview-cover .fallback {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .preview-title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 20px;
-    text-align: center;
-  }
-  .preview-subtitle {
-    font-size: 13px;
-    color: var(--ink-dim);
-    text-align: center;
-    margin-top: -6px;
-  }
-  .preview-authors {
-    font-size: 13.5px;
-    color: var(--ink-dim);
-    text-align: center;
-  }
-  .preview-meta {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px 12px;
-    font-size: 11.5px;
-    color: var(--ink-faint);
-  }
-  .preview-tags {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-  }
-  .tag {
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: var(--paper-alt);
-    border: 1px solid var(--line);
-    font-size: 11px;
-    color: var(--ink-dim);
-  }
-  .preview-desc {
-    font-size: 13px;
-    line-height: 1.55;
-    color: var(--ink-dim);
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  .cover {
-    width: 42px;
-    height: 62px;
-    border-radius: 8px;
-    flex-shrink: 0;
-    overflow: hidden;
-    background: var(--paper-alt);
-  }
-  .cover img,
-  .cover .fallback {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .mid {
-    flex: 1;
-    min-width: 0;
-  }
-  .rtitle {
-    font-weight: 600;
-    font-size: 14px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .rauthor {
-    font-size: 12.5px;
-    color: var(--ink-dim);
-    margin-top: 2px;
-  }
-  .add-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--ink);
-    border: none;
-    color: var(--paper);
-    font-size: 17px;
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-  .chip-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    justify-content: center;
-  }
-  .chip-group .chip {
-    border: 1px solid var(--line);
-    padding: 6px 13px;
-    font-size: 12px;
-  }
-  .scan-frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1;
-    border-radius: 24px;
-    background: var(--ink);
-    overflow: hidden;
-    border: 1px solid var(--line);
-  }
-  .corner {
+  .scan-corner {
     position: absolute;
     width: 26px;
     height: 26px;
@@ -854,28 +540,28 @@
     border-style: solid;
     border-width: 0;
   }
-  .corner.tl {
+  .scan-corner-tl {
     top: 24px;
     left: 24px;
     border-top-width: 2.5px;
     border-left-width: 2.5px;
     border-radius: 8px 0 0 0;
   }
-  .corner.tr {
+  .scan-corner-tr {
     top: 24px;
     right: 24px;
     border-top-width: 2.5px;
     border-right-width: 2.5px;
     border-radius: 0 8px 0 0;
   }
-  .corner.bl {
+  .scan-corner-bl {
     bottom: 24px;
     left: 24px;
     border-bottom-width: 2.5px;
     border-left-width: 2.5px;
     border-radius: 0 0 0 8px;
   }
-  .corner.br {
+  .scan-corner-br {
     bottom: 24px;
     right: 24px;
     border-bottom-width: 2.5px;
@@ -888,8 +574,8 @@
     right: 24px;
     top: 0;
     height: 2px;
-    background: var(--accent);
-    box-shadow: 0 0 12px 2px rgba(201, 164, 76, 0.7);
+    background: #6366f1;
+    box-shadow: 0 0 12px 2px rgba(99, 102, 241, 0.7);
     animation: scanline 1.6s linear infinite;
   }
   @keyframes scanline {
@@ -899,14 +585,5 @@
     100% {
       transform: translateY(420%);
     }
-  }
-  .manual {
-    margin-top: 8px;
-    padding: 13px;
-    border-radius: var(--radius-md);
-    border: 1px dashed var(--line-strong);
-    background: transparent;
-    color: var(--ink-faint);
-    font-size: 13px;
   }
 </style>

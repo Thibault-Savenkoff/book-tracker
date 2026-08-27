@@ -7,19 +7,40 @@ export const CATEGORY_LABEL: Record<string, string> = {
 }
 
 export const CATEGORY_COLOR: Record<string, string> = {
-  roman: '#b1462b',
-  bd: '#3f6b4a',
-  manga: '#b5811f',
-  comics: '#375684',
-  autre: '#6b6153',
+  roman: '#EF4444',
+  manga: '#6366F1',
+  bd: '#10B981',
+  comics: '#F59E0B',
+  autre: '#94A3B8',
 }
 
 export const CATEGORY_GRADIENT: Record<string, string> = {
-  roman: 'linear-gradient(160deg,#c96b4a,#8a3a22)',
-  bd: 'linear-gradient(160deg,#5f9470,#325342)',
-  manga: 'linear-gradient(160deg,#d9a53f,#9c6d1e)',
-  comics: 'linear-gradient(160deg,#5c7fb0,#2d4468)',
-  autre: 'linear-gradient(160deg,#a89c8a,#645a4c)',
+  roman: 'linear-gradient(160deg,#f87171,#b91c1c)',
+  bd: 'linear-gradient(160deg,#34d399,#047857)',
+  manga: 'linear-gradient(160deg,#818cf8,#4338ca)',
+  comics: 'linear-gradient(160deg,#fbbf24,#b45309)',
+  autre: 'linear-gradient(160deg,#cbd5e1,#64748b)',
+}
+
+/** Classes Tailwind pour les badges de genre (fond/texte/bordure, clair + sombre). */
+export const CATEGORY_BADGE_CLASS: Record<string, string> = {
+  roman:
+    'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-accent-roman dark:border-red-500/20',
+  manga:
+    'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-accent-manga dark:border-indigo-500/20',
+  bd: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-accent-bd dark:border-emerald-500/20',
+  comics:
+    'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/10 dark:text-accent-comics dark:border-amber-500/20',
+  autre: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10',
+}
+
+/** Couleur du point associé à un genre (listes/légendes). */
+export const CATEGORY_DOT_CLASS: Record<string, string> = {
+  roman: 'bg-accent-roman',
+  manga: 'bg-accent-manga',
+  bd: 'bg-accent-bd',
+  comics: 'bg-accent-comics',
+  autre: 'bg-slate-400',
 }
 
 export function categoryBg(category: string): string {

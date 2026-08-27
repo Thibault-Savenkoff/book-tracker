@@ -1,7 +1,7 @@
 <script lang="ts">
   import { supabase, type Book } from '../supabase'
   import { currentView } from '../nav'
-  import { CATEGORY_LABEL, CATEGORY_COLOR, CATEGORY_GRADIENT, categoryBg, STATUS_LABEL } from '../bookStyle'
+  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { searchCoverCandidates } from '../bookLookup'
 
   let { id }: { id: string } = $props()
@@ -73,101 +73,100 @@
 </script>
 
 {#if book}
-  <div class="page">
-    <div class="hero" style="background:{CATEGORY_GRADIENT[book.category]}">
-      <div class="hero-glow" style="background:radial-gradient(120% 80% at 50% -10%, {categoryBg(book.category)}, transparent 65%)"></div>
-      <div class="hero-shade"></div>
-      <button class="back" onclick={() => currentView.set({ name: 'collection' })} aria-label="Retour">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-          ><path d="M15 5l-7 7 7 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg
-        >
-      </button>
-      <div class="cover">
-        {#if book.cover_url}<img src={book.cover_url} alt={book.title} />{/if}
-        <div class="accent-bar" style="background:{CATEGORY_COLOR[book.category]}"></div>
-      </div>
-    </div>
-
-    {#if coverPickerOpen}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-      <div
-        class="cover-picker-backdrop"
-        onclick={() => (coverPickerOpen = false)}
-        onkeydown={(e) => e.key === 'Escape' && (coverPickerOpen = false)}
+  <div class="pb-10 md:max-w-3xl md:mx-auto">
+    <div class="p-4 md:p-8">
+      <button
+        class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition text-xs font-medium mb-6"
+        onclick={() => currentView.set({ name: 'collection' })}
       >
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="cover-picker card" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-          <div class="cover-picker-head">
-            <span>Choisir une couverture</span>
-            <button onclick={() => (coverPickerOpen = false)} aria-label="Fermer">✕</button>
-          </div>
-          {#if coverLoading}
-            <p class="cover-picker-empty">Recherche…</p>
-          {:else if coverCandidates.length === 0}
-            <p class="cover-picker-empty">Aucune autre couverture trouvée.</p>
-          {:else}
-            <div class="cover-picker-grid">
-              {#each coverCandidates as url (url)}
-                <button class="cover-option" class:active={url === book.cover_url} onclick={() => pickCover(url)}>
-                  <img src={url} alt="Option de couverture" loading="lazy" />
-                </button>
-              {/each}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        Retour
+      </button>
+
+      <div
+        class="p-6 md:p-8 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border shadow-sm dark:shadow-none flex flex-col md:flex-row gap-8 items-center md:items-start"
+      >
+        <div class="w-40 md:w-56 aspect-[2/3] rounded-xl overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border cover-shadow flex-shrink-0">
+          {#if book.cover_url}<img src={book.cover_url} alt={book.title} class="w-full h-full object-contain" />{/if}
+        </div>
+
+        <div class="flex-1 space-y-5 w-full text-center md:text-left">
+          <div>
+            <div class="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-2">
+              <span class={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${CATEGORY_BADGE_CLASS[book.category]}`}>{CATEGORY_LABEL[book.category].toUpperCase()}</span>
+              {#if book.isbn}<span class="text-xs font-mono text-slate-400 dark:text-slate-500">ISBN: {book.isbn}</span>{/if}
             </div>
-          {/if}
+            <h2 class="font-serif text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">{book.title || 'Sans titre'}</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{book.authors.join(', ') || 'Auteur inconnu'}{book.publisher ? ` • ${book.publisher}` : ''}</p>
+            <button
+              class="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 underline disabled:opacity-50"
+              onclick={openCoverPicker}
+              disabled={coverLoading}
+            >
+              {coverLoading ? 'Recherche…' : 'Améliorer la qualité de la couverture'}
+            </button>
+          </div>
+
+          <div class="flex bg-slate-100 dark:bg-app-bg p-1 rounded-lg border border-light-border dark:border-app-border justify-center md:justify-start">
+            {#each statuses as s (s)}
+              <button
+                class={`flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-mono font-medium transition ${
+                  book.status === s ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                onclick={() => book && (book.status = s)}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            {/each}
+          </div>
         </div>
       </div>
-    {/if}
 
-    <div class="body">
-      <div class="titles">
-        <div class="btitle">{book.title || 'Sans titre'}</div>
-        <div class="bauthor">{book.authors.join(', ') || 'Auteur inconnu'}</div>
-        <button class="change-cover-link" onclick={openCoverPicker} disabled={coverLoading}>
-          {coverLoading ? 'Recherche…' : 'Améliorer la qualité de la couverture'}
-        </button>
-      </div>
-
-      <div class="segmented card">
-        {#each statuses as s (s)}
-          <button class:active={book.status === s} onclick={() => book && (book.status = s)}>{STATUS_LABEL[s]}</button>
-        {/each}
-      </div>
-
-      <div class="fields card">
-        <label>
-          <span>Titre</span>
-          <input bind:value={book.title} />
+      <div class="mt-6 p-6 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border space-y-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Titre</span>
+          <input
+            bind:value={book.title}
+            class="py-2.5 border-0 border-b border-light-border dark:border-app-border bg-transparent outline-none text-slate-900 dark:text-white text-sm focus:border-indigo-500 transition-colors"
+          />
         </label>
-        <label>
-          <span>Auteur(s)</span>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Auteur(s)</span>
           <input
             value={book.authors.join(', ')}
             oninput={(e) => (book!.authors = (e.target as HTMLInputElement).value.split(',').map((a) => a.trim()).filter(Boolean))}
+            class="py-2.5 border-0 border-b border-light-border dark:border-app-border bg-transparent outline-none text-slate-900 dark:text-white text-sm focus:border-indigo-500 transition-colors"
           />
         </label>
-        <div class="two">
-          <label>
-            <span>Éditeur</span>
-            <input bind:value={book.publisher} />
+        <div class="grid grid-cols-2 gap-4">
+          <label class="flex flex-col gap-1.5">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Éditeur</span>
+            <input
+              bind:value={book.publisher}
+              class="py-2.5 border-0 border-b border-light-border dark:border-app-border bg-transparent outline-none text-slate-900 dark:text-white text-sm focus:border-indigo-500 transition-colors"
+            />
           </label>
-          <label>
-            <span>Série</span>
-            <input bind:value={book.series} />
+          <label class="flex flex-col gap-1.5">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Série</span>
+            <input
+              bind:value={book.series}
+              class="py-2.5 border-0 border-b border-light-border dark:border-app-border bg-transparent outline-none text-slate-900 dark:text-white text-sm focus:border-indigo-500 transition-colors"
+            />
           </label>
         </div>
-        <label class="checkbox">
+        <label class="flex flex-row items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <input type="checkbox" bind:checked={book.is_collector_edition} /> Édition collector
         </label>
       </div>
 
-      <div class="cat-block">
-        <span class="field-label">Catégorie</span>
-        <div class="cat-chips">
+      <div class="mt-6 space-y-2">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Catégorie</span>
+        <div class="flex flex-wrap gap-2">
           {#each categories as c (c)}
             <button
-              class="cat-chip"
-              class:active={book.category === c}
-              style={book.category === c ? `border-color:${CATEGORY_COLOR[c]};background:${categoryBg(c)};color:${CATEGORY_COLOR[c]}` : ''}
+              class={`px-3.5 py-1.5 rounded-full border text-xs font-mono font-medium transition ${
+                book.category === c ? CATEGORY_BADGE_CLASS[c] : 'border-light-border dark:border-app-border text-slate-500 dark:text-slate-400 bg-light-surface dark:bg-app-surface'
+              }`}
               onclick={() => book && (book.category = c)}
             >
               {CATEGORY_LABEL[c]}
@@ -176,344 +175,81 @@
         </div>
       </div>
 
-      <div class="rating-block card">
-        <span class="field-label">Ta note</span>
-        <div class="stars">
+      <div class="mt-6 p-6 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border space-y-3">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Ta note</span>
+        <div class="flex gap-1.5">
           {#each [1, 2, 3, 4, 5] as n}
-            <button type="button" class="star" onclick={() => (book!.rating = book!.rating === n ? null : n)}>
+            <button type="button" class="text-2xl leading-none text-amber-500" onclick={() => (book!.rating = book!.rating === n ? null : n)}>
               {(book.rating ?? 0) >= n ? '★' : '☆'}
             </button>
           {/each}
         </div>
       </div>
 
-      <label class="review-label">
-        <span class="field-label">Avis</span>
-        <textarea rows="5" bind:value={book.review} placeholder="Qu'as-tu pensé de ce livre ?"></textarea>
+      <label class="mt-6 flex flex-col gap-2">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avis</span>
+        <textarea
+          rows="5"
+          bind:value={book.review}
+          placeholder="Qu'as-tu pensé de ce livre ?"
+          class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border rounded-xl p-4 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+        ></textarea>
       </label>
 
-      <div class="actions">
-        <button class="delete" onclick={remove}>Supprimer</button>
-        <button class="save" onclick={save} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+      <div class="mt-6 flex gap-3">
+        <button
+          class="flex-1 py-3.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-500 text-sm font-semibold"
+          onclick={remove}
+        >
+          Supprimer
+        </button>
+        <button
+          class="flex-[1.4] py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-60"
+          onclick={save}
+          disabled={saving}
+        >
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
       </div>
     </div>
   </div>
 {/if}
 
-<style>
-  .page {
-    padding-bottom: 40px;
-  }
-  @media (min-width: 900px) {
-    .page {
-      max-width: 640px;
-      margin: 0 auto;
-    }
-  }
-  .hero {
-    position: relative;
-    height: 220px;
-  }
-  .hero-glow {
-    position: absolute;
-    inset: 0;
-  }
-  .hero-shade {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15), var(--paper) 96%);
-  }
-  .back {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: rgba(20, 12, 5, 0.35);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-  }
-  .hero .cover {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -52px;
-    margin: 0 auto;
-    z-index: 2;
-    width: 160px;
-    aspect-ratio: 2 / 3;
-    border-radius: 14px;
-    overflow: hidden;
-    background: var(--paper-alt);
-    box-shadow: 0 20px 40px rgba(20, 12, 5, 0.35);
-    border: 3px solid var(--paper);
-    padding: 5px;
-  }
-  .hero .cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    border-radius: 6px;
-  }
-  .accent-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-  }
-  .change-cover-link {
-    margin-top: 10px;
-    border: none;
-    background: none;
-    padding: 0;
-    color: var(--accent);
-    font-size: 12.5px;
-    font-weight: 700;
-    text-decoration: underline;
-  }
-  .cover-picker-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 20;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-  }
-  @media (min-width: 640px) {
-    .cover-picker-backdrop {
-      align-items: center;
-    }
-  }
-  .cover-picker {
-    width: 100%;
-    max-width: 460px;
-    max-height: 78vh;
-    display: flex;
-    flex-direction: column;
-    border-radius: 20px 20px 0 0;
-    padding: 16px;
-    gap: 14px;
-  }
-  @media (min-width: 640px) {
-    .cover-picker {
-      border-radius: 20px;
-    }
-  }
-  .cover-picker-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 15px;
-    color: var(--ink);
-  }
-  .cover-picker-head button {
-    border: none;
-    background: none;
-    color: var(--ink-faint);
-    font-size: 16px;
-    padding: 4px;
-  }
-  .cover-picker-empty {
-    color: var(--ink-faint);
-    font-size: 13px;
-    text-align: center;
-    padding: 20px 0;
-  }
-  .cover-picker-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    overflow-y: auto;
-    padding-bottom: 2px;
-  }
-  .cover-option {
-    aspect-ratio: 2 / 3;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 2px solid transparent;
-    padding: 0;
-    background: var(--surface);
-  }
-  .cover-option.active {
-    border-color: var(--accent);
-  }
-  .cover-option img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 72px 22px 40px;
-  }
-  .titles {
-    text-align: center;
-  }
-  .btitle {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 20px;
-    color: var(--ink);
-  }
-  .bauthor {
-    font-size: 13px;
-    color: var(--ink-dim);
-    margin-top: 3px;
-  }
-  .segmented,
-  .cat-chips {
-    display: flex;
-  }
-  .segmented {
-    padding: 4px;
-    gap: 2px;
-  }
-  .segmented button {
-    flex: 1;
-    padding: 9px 4px;
-    border-radius: 11px;
-    border: none;
-    background: transparent;
-    color: var(--ink-dim);
-    font-size: 11.5px;
-    font-weight: 700;
-  }
-  .segmented button.active {
-    background: var(--ink);
-    color: var(--paper);
-  }
-  .fields {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .fields label,
-  .review-label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .field-label,
-  .fields label span {
-    font-size: 11px;
-    color: var(--ink-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .fields input {
-    padding: 11px 0;
-    border: none;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    color: var(--ink);
-    font-size: 14.5px;
-    outline: none;
-  }
-  .fields input:focus {
-    border-bottom-color: var(--accent);
-  }
-  .two {
-    display: flex;
-    gap: 14px;
-  }
-  .two label {
-    flex: 1;
-  }
-  .checkbox {
-    flex-direction: row !important;
-    align-items: center;
-    gap: 8px !important;
-    font-size: 13px;
-    color: var(--ink-dim);
-  }
-  .cat-block {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .cat-chips {
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .cat-chip {
-    padding: 8px 15px;
-    border-radius: 20px;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--ink-dim);
-    font-size: 12.5px;
-  }
-  .cat-chip.active {
-    font-weight: 700;
-  }
-  .rating-block {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .stars {
-    display: flex;
-    gap: 8px;
-  }
-  .star {
-    background: none;
-    border: none;
-    font-size: 28px;
-    color: var(--accent);
-    padding: 0;
-    line-height: 1;
-  }
-  .review-label textarea {
-    padding: 14px 15px;
-    border-radius: 16px;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--ink);
-    font-size: 14px;
-    font-family: inherit;
-    resize: none;
-    outline: none;
-    line-height: 1.5;
-  }
-  .review-label textarea:focus {
-    border-color: var(--accent);
-  }
-  .actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 4px;
-  }
-  .actions button {
-    flex: 1;
-    padding: 14px;
-    border-radius: 16px;
-    border: none;
-    font-size: 14px;
-  }
-  .save {
-    flex: 1.4;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-  }
-  .delete {
-    border: 1px solid rgba(193, 84, 63, 0.35);
-    background: rgba(193, 84, 63, 0.1);
-    color: var(--danger);
-    font-weight: 600;
-  }
-</style>
+{#if coverPickerOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div
+    class="fixed inset-0 z-30 bg-black/60 flex items-end sm:items-center justify-center"
+    onclick={() => (coverPickerOpen = false)}
+    onkeydown={(e) => e.key === 'Escape' && (coverPickerOpen = false)}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div
+      class="w-full sm:max-w-md max-h-[78vh] flex flex-col rounded-t-2xl sm:rounded-2xl p-4 gap-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="flex items-center justify-between font-serif font-bold text-base text-slate-900 dark:text-white">
+        <span>Choisir une couverture</span>
+        <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (coverPickerOpen = false)} aria-label="Fermer">✕</button>
+      </div>
+      {#if coverLoading}
+        <p class="text-center text-sm text-slate-400 py-5">Recherche…</p>
+      {:else if coverCandidates.length === 0}
+        <p class="text-center text-sm text-slate-400 py-5">Aucune autre couverture trouvée.</p>
+      {:else}
+        <div class="grid grid-cols-3 gap-2.5 overflow-y-auto thin-scrollbar">
+          {#each coverCandidates as url (url)}
+            <button
+              class={`aspect-[2/3] rounded-lg overflow-hidden border-2 ${url === book?.cover_url ? 'border-indigo-500' : 'border-transparent'} bg-light-card dark:bg-app-card`}
+              onclick={() => pickCover(url)}
+            >
+              <img src={url} alt="Option de couverture" loading="lazy" class="w-full h-full object-cover" />
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}

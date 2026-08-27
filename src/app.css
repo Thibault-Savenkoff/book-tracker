@@ -1,108 +1,51 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&display=swap');
+@import 'tailwindcss';
+@config '../tailwind.config.js';
 
-:root {
-  color-scheme: dark;
-
-  /* surfaces: cloth-bound library ledger */
-  --paper: #14231c;
-  --paper-alt: #1c2f26;
-  --surface: #203629;
-  --line: rgba(233, 225, 201, 0.14);
-  --line-strong: rgba(233, 225, 201, 0.28);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.65);
-
-  /* ink: ivory */
-  --ink: #f3efe4;
-  --ink-dim: rgba(243, 239, 228, 0.68);
-  --ink-faint: rgba(243, 239, 228, 0.45);
-
-  /* accent: brass / gilt lettering */
-  --accent: #c9a44c;
-  --accent-strong: #e0bd6b;
-  --accent-tint: rgba(201, 164, 76, 0.14);
-  --accent-ink: #14231c;
-
-  /* stamp: due-date ink */
-  --danger: #c1543f;
-  --stamp: #a13d2f;
-
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --radius-sm: 9px;
-
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
-
-  font: 16px/1.45 var(--font-sans);
-  color: var(--ink);
-  background: var(--paper);
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  }
 }
 
-* {
-  box-sizing: border-box;
+@layer utilities {
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+  .dark .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: #1f2430;
+  }
+
+  .cover-shadow {
+    box-shadow:
+      0 10px 20px -5px rgba(0, 0, 0, 0.15),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+  .dark .cover-shadow {
+    box-shadow:
+      0 12px 24px -6px rgba(0, 0, 0, 0.7),
+      0 4px 8px -4px rgba(0, 0, 0, 0.4);
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  min-height: 100dvh;
-}
-
-button {
-  font: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-input,
-textarea {
-  font-family: inherit;
-}
-input::placeholder,
-textarea::placeholder {
-  color: var(--ink-faint);
 }
 
 ::selection {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-}
-
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  text-transform: uppercase;
-}
-
-.page-title {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 27px;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-.chip {
-  flex-shrink: 0;
-  padding: 7px 15px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: none;
-  color: var(--ink-dim);
-  font-size: 12px;
-  font-weight: 600;
-}
-.chip.active {
-  background: var(--ink);
-  color: var(--paper);
+  background: #6366f1;
+  color: #fff;
 }

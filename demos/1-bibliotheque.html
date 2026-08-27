@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BiblioLog — Bibliothèque</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#090A0E',
+              surface: '#11131A',
+              card: '#161922',
+              border: 'rgba(255, 255, 255, 0.07)',
+              borderHover: 'rgba(255, 255, 255, 0.16)',
+            },
+            light: {
+              bg: '#F8F9FA',
+              surface: '#FFFFFF',
+              card: '#F1F3F7',
+              border: '#E2E8F0',
+              borderHover: '#CBD5E1',
+            },
+            accent: {
+              roman: '#EF4444',
+              manga: '#6366F1',
+              bd: '#10B981',
+              comics: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            serif: ['"Instrument Serif"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+    .thin-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .dark .thin-scrollbar::-webkit-scrollbar-thumb { background: #1F2430; border-radius: 9999px; }
+    .thin-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
+    
+    .cover-shadow {
+      box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+    .dark .cover-shadow {
+      box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.7), 0 4px 8px -4px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body class="h-full w-full flex overflow-hidden select-none bg-light-bg text-slate-800 dark:bg-app-bg dark:text-slate-200">
+
+  <!-- ================= SIDEBAR DESKTOP ================= -->
+  <aside class="hidden md:flex w-64 flex-col bg-light-surface dark:bg-app-surface border-r border-light-border dark:border-app-border flex-shrink-0 transition-colors">
+    
+    <!-- Logo & Statut Tailscale -->
+    <div class="h-16 px-5 flex items-center justify-between border-b border-light-border dark:border-app-border">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+          <i data-lucide="book-open-check" class="w-4 h-4"></i>
+        </div>
+        <span class="font-serif text-2xl font-bold tracking-tight text-slate-900 dark:text-white">BiblioLog</span>
+      </div>
+      <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Tailscale Live Node"></span>
+    </div>
+
+    <!-- Navigation Principale -->
+    <div class="flex-1 overflow-y-auto thin-scrollbar p-3 space-y-6">
+      
+      <div>
+        <div class="px-3 mb-2 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500">Rayonnages</div>
+        <nav class="space-y-1">
+          <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white font-medium text-sm transition">
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="layout-grid" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+              <span>Tous les volumes</span>
+            </div>
+            <span class="text-xs font-mono text-slate-600 dark:text-slate-400 bg-white dark:bg-white/5 px-2 py-0.5 rounded shadow-sm dark:shadow-none border border-slate-200 dark:border-transparent">428</span>
+          </button>
+          
+          <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 text-sm transition">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2 h-2 rounded-full bg-accent-roman"></span>
+              <span>Romans</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">164</span>
+          </button>
+
+          <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 text-sm transition">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2 h-2 rounded-full bg-accent-manga"></span>
+              <span>Mangas</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">182</span>
+          </button>
+
+          <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 text-sm transition">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2 h-2 rounded-full bg-accent-bd"></span>
+              <span>Bandes Dessinées</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">48</span>
+          </button>
+
+          <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 text-sm transition">
+            <div class="flex items-center gap-2.5">
+              <span class="w-2 h-2 rounded-full bg-accent-comics"></span>
+              <span>Comics</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">34</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Statuts -->
+      <div>
+        <div class="px-3 mb-2 text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-slate-500">États</div>
+        <nav class="space-y-1 text-sm">
+          <a href="#" class="flex items-center justify-between px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition">
+            <div class="flex items-center gap-2">
+              <i data-lucide="flame" class="w-4 h-4 text-amber-500"></i>
+              <span>En cours</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">3</span>
+          </a>
+          <a href="#" class="flex items-center justify-between px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition">
+            <div class="flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
+              <span>Lus</span>
+            </div>
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500">387</span>
+          </a>
+        </nav>
+      </div>
+
+    </div>
+
+    <!-- Profil -->
+    <div class="p-3 border-t border-light-border dark:border-app-border bg-slate-50 dark:bg-app-bg/50">
+      <div class="flex items-center gap-3 p-2 rounded-lg bg-white dark:bg-white/5 border border-light-border dark:border-app-border shadow-sm dark:shadow-none">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-xs text-white">
+          JM
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">Julien M.</p>
+          <p class="text-[10px] font-mono text-slate-500 truncate">Supabase Sync • 2026</p>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ================= ZONE PRINCIPALE (FULLSCREEN) ================= -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden">
+    
+    <!-- Topbar -->
+    <header class="h-16 px-4 md:px-8 border-b border-light-border dark:border-app-border flex items-center justify-between gap-4 bg-light-surface/90 dark:bg-app-bg/80 backdrop-blur-md z-10 transition-colors">
+      
+      <!-- Barre de recherche -->
+      <div class="relative flex-1 max-w-md">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+        <input 
+          type="text" 
+          placeholder="Filtrer par titre, auteur, étiquette... (⌘K)" 
+          class="w-full bg-slate-100 dark:bg-app-surface border border-light-border dark:border-app-border focus:border-indigo-500 rounded-lg pl-10 pr-4 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none transition"
+        >
+      </div>
+
+      <!-- Contrôles : Bouton Theme Switcher + Ajout -->
+      <div class="flex items-center gap-3">
+        
+        <!-- COMMUTATEUR THEME CLAIR / SOMBRE -->
+        <button onclick="toggleTheme()" id="theme-btn" class="p-2 rounded-lg bg-slate-100 dark:bg-app-surface border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Basculer Mode Clair / Sombre">
+          <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+          <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+        </button>
+
+        <button onclick="openBookDrawer('Dune', 'Frank Herbert', 'Roman', 420, 680, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80')" class="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition shadow-md shadow-indigo-600/20">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Ajouter</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Contenu des Rayonnages -->
+    <div class="flex-1 overflow-y-auto thin-scrollbar p-4 md:p-8 space-y-8 pb-24 md:pb-8">
+      
+      <!-- Section : En cours -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Lectures Actuelles</h2>
+          </div>
+          <span class="text-xs font-mono text-slate-400 dark:text-slate-500">3 volumes en cours</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          
+          <!-- Card 1 (Roman) -->
+          <div onclick="openBookDrawer('Dune', 'Frank Herbert', 'Roman', 420, 680, 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80')" class="group p-4 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border hover:border-slate-300 dark:hover:border-app-borderHover shadow-sm dark:shadow-none transition cursor-pointer flex gap-4">
+            <div class="w-20 h-28 rounded-md overflow-hidden bg-slate-100 dark:bg-app-card flex-shrink-0 cover-shadow group-hover:scale-105 transition-transform duration-300">
+              <img src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80" alt="Dune" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 flex flex-col justify-between min-w-0">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-accent-roman dark:border-red-500/20">ROMAN</span>
+                  <span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">61%</span>
+                </div>
+                <h3 class="font-semibold text-sm text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">Dune</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">Frank Herbert</p>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1">
+                  <span>p. 420 / 680</span>
+                  <span class="text-amber-600 dark:text-amber-400">~2h rest.</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-app-card rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-red-500 to-amber-500 rounded-full" style="width: 61%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2 (Manga) -->
+          <div onclick="openBookDrawer('Berserk — Tome 13', 'Kentaro Miura', 'Manga', 140, 224, 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80')" class="group p-4 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border hover:border-slate-300 dark:hover:border-app-borderHover shadow-sm dark:shadow-none transition cursor-pointer flex gap-4">
+            <div class="w-20 h-28 rounded-md overflow-hidden bg-slate-100 dark:bg-app-card flex-shrink-0 cover-shadow group-hover:scale-105 transition-transform duration-300">
+              <img src="https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80" alt="Berserk" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 flex flex-col justify-between min-w-0">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-accent-manga dark:border-indigo-500/20">MANGA</span>
+                  <span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">62%</span>
+                </div>
+                <h3 class="font-semibold text-sm text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">Berserk — Tome 13</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">Kentaro Miura</p>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1">
+                  <span>p. 140 / 224</span>
+                  <span class="text-indigo-600 dark:text-indigo-400">Vol. 13</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-app-card rounded-full overflow-hidden">
+                  <div class="h-full bg-indigo-500 rounded-full" style="width: 62%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3 (BD) -->
+          <div onclick="openBookDrawer('Blacksad — Tome 1', 'Díaz Canales & Guarnido', 'BD', 48, 56, 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=400&q=80')" class="group p-4 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border hover:border-slate-300 dark:hover:border-app-borderHover shadow-sm dark:shadow-none transition cursor-pointer flex gap-4">
+            <div class="w-20 h-28 rounded-md overflow-hidden bg-slate-100 dark:bg-app-card flex-shrink-0 cover-shadow group-hover:scale-105 transition-transform duration-300">
+              <img src="https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=400&q=80" alt="Blacksad" class="w-full h-full object-cover">
+            </div>
+            <div class="flex-1 flex flex-col justify-between min-w-0">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-accent-bd dark:border-emerald-500/20">BD</span>
+                  <span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">85%</span>
+                </div>
+                <h3 class="font-semibold text-sm text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">Blacksad: Ombres</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">Canales & Guarnido</p>
+              </div>
+              <div>
+                <div class="flex justify-between text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-1">
+                  <span>p. 48 / 56</span>
+                  <span class="text-emerald-600 dark:text-emerald-400">Presque fini</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-app-card rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full" style="width: 85%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Grille Globale -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-wide">Tous les Ouvrages</h2>
+          <div class="flex items-center gap-2 text-xs font-mono text-slate-500">
+            <span>Tri :</span>
+            <select class="bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border rounded px-2 py-1 text-slate-700 dark:text-slate-200 text-xs focus:outline-none">
+              <option>Dernière activité</option>
+              <option>Titre (A-Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-5">
+          
+          <!-- Ouvrage 1 -->
+          <div class="group flex flex-col cursor-pointer">
+            <div class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1">
+              <img src="https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=400&q=80" alt="L'Étranger" class="w-full h-full object-cover">
+              <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">LU</span>
+            </div>
+            <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">L'Étranger</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">Albert Camus</p>
+          </div>
+
+          <!-- Ouvrage 2 -->
+          <div class="group flex flex-col cursor-pointer">
+            <div class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1">
+              <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=400&q=80" alt="Saga" class="w-full h-full object-cover">
+              <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-amber-600 dark:text-accent-comics border border-amber-500/30">COMICS</span>
+            </div>
+            <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Saga — Tome 1</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">Vaughan & Staples</p>
+          </div>
+
+          <!-- Ouvrage 3 -->
+          <div class="group flex flex-col cursor-pointer">
+            <div class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1">
+              <img src="https://images.unsplash.com/photo-1614583225154-5fcdda07019e?auto=format&fit=crop&w=400&q=80" alt="Chainsaw Man" class="w-full h-full object-cover">
+              <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-indigo-600 dark:text-accent-manga border border-indigo-500/30">MANGA</span>
+            </div>
+            <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Chainsaw Man #1</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">Tatsuki Fujimoto</p>
+          </div>
+
+          <!-- Ouvrage 4 -->
+          <div class="group flex flex-col cursor-pointer">
+            <div class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1">
+              <img src="https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=400&q=80" alt="Neuromancien" class="w-full h-full object-cover">
+              <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-red-600 dark:text-accent-roman border border-red-500/30">ROMAN</span>
+            </div>
+            <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Neuromancien</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">William Gibson</p>
+          </div>
+
+          <!-- Ouvrage 5 -->
+          <div class="group flex flex-col cursor-pointer">
+            <div class="aspect-[2/3] w-full rounded-xl overflow-hidden bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cover-shadow relative mb-2.5 transition duration-200 group-hover:-translate-y-1">
+              <img src="https://images.unsplash.com/photo-1569701813229-33284b643e3c?auto=format&fit=crop&w=400&q=80" alt="Akira" class="w-full h-full object-cover">
+              <span class="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-white/90 dark:bg-black/70 backdrop-blur-md text-indigo-600 dark:text-accent-manga border border-indigo-500/30">MANGA</span>
+            </div>
+            <h4 class="text-xs font-semibold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Akira — Vol. 1</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">Katsuhiro Otomo</p>
+          </div>
+
+          <!-- Slot Ajout -->
+          <div onclick="toggleSlideOver()" class="aspect-[2/3] w-full rounded-xl border border-dashed border-light-border dark:border-app-border hover:border-indigo-500 flex flex-col items-center justify-center cursor-pointer group bg-light-surface/50 dark:bg-app-surface/40 hover:bg-light-surface dark:hover:bg-app-surface transition p-4 text-center">
+            <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 group-hover:bg-indigo-600 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:text-white mb-2 transition">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+            </div>
+            <span class="text-xs font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">Scanner / Ajouter</span>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Navigation Mobile -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-light-surface/90 dark:bg-app-surface/90 backdrop-blur-xl border-t border-light-border dark:border-app-border flex items-center justify-around px-4 z-20">
+      <button class="flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400">
+        <i data-lucide="library" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Étagères</span>
+      </button>
+      <button onclick="toggleSlideOver()" class="flex flex-col items-center gap-1 text-slate-400">
+        <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white -mt-3 shadow-lg shadow-indigo-600/40">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+        </div>
+        <span class="text-[10px] font-medium">Ajout</span>
+      </button>
+      <button onclick="toggleTheme()" class="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400">
+        <i data-lucide="sun-moon" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Thème</span>
+      </button>
+    </nav>
+  </main>
+
+  <!-- Slide-Over -->
+  <aside id="slide-over" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-light-surface dark:bg-app-surface border-l border-light-border dark:border-app-border shadow-2xl transform translate-x-full transition-transform duration-300 z-30 flex flex-col">
+    <div class="h-16 px-6 border-b border-light-border dark:border-app-border flex items-center justify-between">
+      <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Aperçu Rapide</span>
+      <button onclick="toggleSlideOver()" class="p-2 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto thin-scrollbar p-6 space-y-6" id="drawer-content"></div>
+  </aside>
+
+  <div id="backdrop" onclick="toggleSlideOver()" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-20 transition-opacity"></div>
+
+  <script>
+    lucide.createIcons();
+
+    // Commutateur de Thème
+    function toggleTheme() {
+      const html = document.documentElement;
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      } else {
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleSlideOver() {
+      const slideOver = document.getElementById('slide-over');
+      const backdrop = document.getElementById('backdrop');
+      const isOpen = !slideOver.classList.contains('translate-x-full');
+      if (isOpen) {
+        slideOver.classList.add('translate-x-full');
+        backdrop.classList.add('hidden');
+      } else {
+        slideOver.classList.remove('translate-x-full');
+        backdrop.classList.remove('hidden');
+      }
+    }
+
+    function openBookDrawer(title, author, genre, current, total, imgUrl) {
+      const pct = Math.round((current / total) * 100);
+      const drawer = document.getElementById('drawer-content');
+      
+      drawer.innerHTML = `
+        <div class="flex flex-col items-center text-center">
+          <div class="w-32 aspect-[2/3] rounded-lg overflow-hidden cover-shadow border border-light-border dark:border-app-border mb-4">
+            <img src="${imgUrl}" class="w-full h-full object-cover">
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-light-border dark:border-white/10 mb-1">${genre.toUpperCase()}</span>
+          <h3 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">${title}</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">${author}</p>
+        </div>
+
+        <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-light-border dark:border-app-border space-y-3">
+          <div class="flex justify-between text-xs font-mono">
+            <span class="text-slate-500 dark:text-slate-400">Progression</span>
+            <span class="text-slate-900 dark:text-white font-semibold">${current} / ${total} p. (${pct}%)</span>
+          </div>
+          <input type="range" min="0" max="${total}" value="${current}" class="w-full accent-indigo-600 h-1.5 bg-slate-200 dark:bg-app-bg rounded cursor-pointer">
+        </div>
+
+        <div class="space-y-2">
+          <button class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition">Ouvrir la fiche complète</button>
+          <button class="w-full py-2.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-medium border border-light-border dark:border-app-border transition">Marquer comme Terminé</button>
+        </div>
+      `;
+      toggleSlideOver();
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

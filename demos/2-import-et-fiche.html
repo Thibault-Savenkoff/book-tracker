@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BiblioLog — Fiche & Import</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#090A0E',
+              surface: '#11131A',
+              card: '#161922',
+              border: 'rgba(255, 255, 255, 0.07)',
+            },
+            light: {
+              bg: '#F8F9FA',
+              surface: '#FFFFFF',
+              card: '#F1F3F7',
+              border: '#E2E8F0',
+            },
+            accent: {
+              roman: '#EF4444',
+              manga: '#6366F1',
+              bd: '#10B981',
+              comics: '#F59E0B',
+            }
+          },
+          fontFamily: {
+            serif: ['"Instrument Serif"', 'serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; transition: background-color 0.25s, color 0.25s; }
+    .thin-scrollbar::-webkit-scrollbar { width: 6px; }
+    .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .dark .thin-scrollbar::-webkit-scrollbar-thumb { background: #1F2430; border-radius: 9999px; }
+    .thin-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; }
+  </style>
+</head>
+<body class="h-full w-full flex flex-col bg-light-bg text-slate-800 dark:bg-app-bg dark:text-slate-200 overflow-hidden select-none">
+
+  <!-- ================= TOPBAR FULLSCREEN ================= -->
+  <header class="h-16 px-4 md:px-8 border-b border-light-border dark:border-app-border flex items-center justify-between bg-light-surface/90 dark:bg-app-surface/90 backdrop-blur-md flex-shrink-0 z-10">
+    <div class="flex items-center gap-4">
+      <a href="#" class="p-2 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      </a>
+      <div>
+        <span class="text-[10px] font-mono text-slate-400 dark:text-slate-500 uppercase">Bibliothèque / Détail</span>
+        <h1 class="font-serif text-xl font-bold text-slate-900 dark:text-white leading-none">Fiche Ouvrage & Import Multi-API</h1>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- Switcher d'onglet vue -->
+      <div class="flex bg-slate-100 dark:bg-app-bg p-1 rounded-lg border border-light-border dark:border-app-border text-xs font-mono">
+        <button onclick="switchView('detail')" id="btn-view-detail" class="px-3 py-1.5 rounded-md bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm dark:shadow-none font-medium">Fiche Livre</button>
+        <button onclick="switchView('import')" id="btn-view-import" class="px-3 py-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">Import Multi-API</button>
+      </div>
+
+      <!-- Theme Button -->
+      <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-app-surface border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Basculer Mode Clair / Sombre">
+        <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+        <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= CONTENEUR PRINCIPAL ================= -->
+  <main class="flex-1 overflow-y-auto thin-scrollbar p-4 md:p-8">
+    <div class="max-w-5xl mx-auto">
+
+      <!-- ================= VUE 1 : FICHE LIVRE ================= -->
+      <div id="view-detail" class="space-y-8 animate-fadeIn">
+        
+        <div class="p-6 md:p-8 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border shadow-sm dark:shadow-none flex flex-col md:flex-row gap-8 items-start">
+          
+          <div class="w-full md:w-56 aspect-[2/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-app-card border border-light-border dark:border-app-border shadow-xl flex-shrink-0 relative group">
+            <img src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80" alt="Dune" class="w-full h-full object-cover">
+            <button class="absolute bottom-3 right-3 p-2 rounded-lg bg-white/90 dark:bg-black/80 backdrop-blur-md text-slate-800 dark:text-slate-200 border border-light-border dark:border-white/10 text-xs flex items-center gap-1.5 shadow-sm">
+              <i data-lucide="image" class="w-3.5 h-3.5"></i> Changer
+            </button>
+          </div>
+
+          <div class="flex-1 space-y-5 w-full">
+            <div>
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-accent-roman dark:border-red-500/20">ROMAN SF</span>
+                <span class="text-xs font-mono text-slate-400 dark:text-slate-500">ISBN: 978-2266320481</span>
+                <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400 ml-auto flex items-center gap-1">
+                  <i data-lucide="cloud-check" class="w-3.5 h-3.5"></i> Supabase Sync
+                </span>
+              </div>
+              <h2 class="font-serif text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tight">Dune</h2>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Frank Herbert • Michel Demuth • Pocket (1965)</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-light-border dark:border-app-border text-xs font-mono text-slate-600 dark:text-slate-400 hover:text-slate-900">À Lire</button>
+              <button class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-mono font-medium shadow-md shadow-indigo-600/30">En Cours</button>
+              <button class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-light-border dark:border-app-border text-xs font-mono text-slate-600 dark:text-slate-400 hover:text-slate-900">Terminé</button>
+            </div>
+
+            <!-- Slider Progression -->
+            <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-light-border dark:border-app-border space-y-2">
+              <div class="flex justify-between items-center text-xs font-mono">
+                <span class="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <i data-lucide="bookmark" class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400"></i> Page actuelle
+                </span>
+                <span class="text-slate-900 dark:text-white font-semibold">420 sur 680 (61%)</span>
+              </div>
+              <input type="range" min="0" max="680" value="420" class="w-full accent-indigo-600 h-2 bg-slate-200 dark:bg-app-bg rounded-lg cursor-pointer">
+              <div class="flex justify-between text-[11px] font-mono text-slate-500">
+                <span>Débuté le 12 Août 2026</span>
+                <span class="text-indigo-600 dark:text-indigo-400">Rythme : ~42 p./session</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Notes & Citations -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div class="p-6 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+              <h3 class="font-serif text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i data-lucide="quote" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                Citations Notables
+              </h3>
+              <button class="text-xs font-mono text-indigo-600 dark:text-indigo-400 hover:underline">+ Ajouter</button>
+            </div>
+
+            <div class="space-y-3">
+              <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-light-border dark:border-app-border space-y-2">
+                <p class="font-serif italic text-slate-700 dark:text-slate-200 text-sm leading-relaxed">
+                  « Je ne connaîtrai pas la peur, car la peur tue l'esprit. La peur est la petite mort qui conduit à l'oblitération totale. »
+                </p>
+                <div class="text-[10px] font-mono text-slate-500 text-right">Page 28 • Litanie contre la peur</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-6 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border space-y-4 shadow-sm dark:shadow-none">
+            <div class="flex items-center justify-between">
+              <h3 class="font-serif text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i data-lucide="pen-tool" class="w-4 h-4 text-amber-500"></i>
+                Notes de Lecture & Analyse
+              </h3>
+              <span class="text-[10px] font-mono text-slate-400 dark:text-slate-500">Auto-save</span>
+            </div>
+
+            <textarea 
+              rows="5" 
+              class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border rounded-xl p-4 text-xs font-sans text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+              placeholder="Tes remarques sur l'arc narratif..."
+            >Relecture d'été en prévision du cycle complet. L'intrigue politique sur Arrakis reste exemplaire.</textarea>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ================= VUE 2 : IMPORT MULTI-API ================= -->
+      <div id="view-import" class="hidden space-y-6 animate-fadeIn">
+        
+        <div class="p-6 md:p-8 rounded-2xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border space-y-6 shadow-sm dark:shadow-none">
+          
+          <div>
+            <span class="text-xs font-mono text-indigo-600 dark:text-indigo-400">SUPABASE EDGE PROXY DISPATCHER</span>
+            <h2 class="font-serif text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Recherche Fédérée de Métadonnées</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Interroge simultanément plusieurs sources et contourne les restrictions CORS de Comic Vine.</p>
+          </div>
+
+          <div class="relative">
+            <i data-lucide="search" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input 
+              type="text" 
+              value="Saga Vaughan"
+              placeholder="Titre, Auteur, ISBN..." 
+              class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border focus:border-indigo-500 rounded-xl py-3.5 pl-12 pr-4 text-sm text-slate-900 dark:text-white focus:outline-none transition"
+            >
+          </div>
+
+          <!-- Latences Multi-Source -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] font-mono">
+            <div class="p-2.5 rounded-lg bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-between">
+              <span class="text-slate-600 dark:text-slate-300">Google Books</span>
+              <span class="text-emerald-600 dark:text-emerald-400">120ms</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-between">
+              <span class="text-slate-600 dark:text-slate-300">AniList API</span>
+              <span class="text-emerald-600 dark:text-emerald-400">80ms</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-between">
+              <span class="text-slate-600 dark:text-slate-300">OpenLibrary</span>
+              <span class="text-emerald-600 dark:text-emerald-400">240ms</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-indigo-50 dark:bg-app-card border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-between">
+              <span class="text-indigo-700 dark:text-indigo-300">Comic Vine</span>
+              <span class="text-indigo-600 dark:text-indigo-400 font-semibold">Proxy ✓</span>
+            </div>
+          </div>
+
+          <!-- Résultats Fédérés -->
+          <div class="space-y-3">
+            <span class="text-xs font-mono text-slate-400 dark:text-slate-500 uppercase tracking-wider">Résultats Disponibles</span>
+
+            <!-- Résultat Comic Vine -->
+            <div class="p-4 rounded-xl bg-light-card dark:bg-app-card border border-indigo-200 dark:border-indigo-500/40 flex gap-4 items-center">
+              <div class="w-14 h-20 rounded bg-slate-200 dark:bg-app-bg overflow-hidden flex-shrink-0 border border-light-border dark:border-app-border">
+                <img src="https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=300&q=80" class="w-full h-full object-cover">
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/10 dark:text-accent-comics dark:border-amber-500/20">COMICS</span>
+                  <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">Comic Vine Proxy</span>
+                </div>
+                <h4 class="font-semibold text-sm text-slate-900 dark:text-white truncate">Saga (Image Comics) — Volume 1</h4>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Brian K. Vaughan & Fiona Staples • 160 pages</p>
+              </div>
+              <button onclick="switchView('detail')" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium font-mono transition">
+                Importer
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+      } else {
+        html.classList.add('dark');
+      }
+      lucide.createIcons();
+    }
+
+    function switchView(viewName) {
+      const detailView = document.getElementById('view-detail');
+      const importView = document.getElementById('view-import');
+      const btnDetail = document.getElementById('btn-view-detail');
+      const btnImport = document.getElementById('btn-view-import');
+
+      if (viewName === 'detail') {
+        detailView.classList.remove('hidden');
+        importView.classList.add('hidden');
+        btnDetail.className = 'px-3 py-1.5 rounded-md bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm dark:shadow-none font-medium';
+        btnImport.className = 'px-3 py-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+      } else {
+        detailView.classList.add('hidden');
+        importView.classList.remove('hidden');
+        btnImport.className = 'px-3 py-1.5 rounded-md bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm dark:shadow-none font-medium';
+        btnDetail.className = 'px-3 py-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+      }
+    }
+  </script>
+</body>
+</html>
