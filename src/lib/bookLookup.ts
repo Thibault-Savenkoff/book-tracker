@@ -17,6 +17,56 @@ export type BookLookupResult = {
 
 export class LookupNetworkError extends Error {}
 
+// Acronymes/alias courants pour mangas, comics et romans/fantasy — évite de taper le titre complet.
+const ALIAS_MAP: Record<string, string> = {
+  // Mangas
+  mha: 'My Hero Academia',
+  bnha: 'My Hero Academia',
+  dbz: 'Dragon Ball Z',
+  dbs: 'Dragon Ball Super',
+  db: 'Dragon Ball',
+  fma: 'Fullmetal Alchemist',
+  fmab: 'Fullmetal Alchemist',
+  snk: "L'Attaque des Titans",
+  aot: 'Attack on Titan',
+  jjk: 'Jujutsu Kaisen',
+  csm: 'Chainsaw Man',
+  hxh: 'Hunter x Hunter',
+  opm: 'One Punch Man',
+  kny: 'Demon Slayer Kimetsu no Yaiba',
+  ds: 'Demon Slayer',
+  dn: 'Death Note',
+  tg: 'Tokyo Ghoul',
+  sao: 'Sword Art Online',
+  sl: 'Solo Leveling',
+  orv: 'Omniscient Reader',
+  tbate: 'The Beginning After The End',
+  eva: 'Neon Genesis Evangelion',
+  nge: 'Neon Genesis Evangelion',
+
+  // Comics & BD
+  twd: 'The Walking Dead',
+  tdk: 'Batman The Dark Knight',
+  cw: 'Civil War Marvel',
+
+  // Romans & Fantasy
+  lotr: 'Le Seigneur des Anneaux',
+  sda: 'Le Seigneur des Anneaux',
+  hp: 'Harry Potter',
+  got: 'Game of Thrones',
+  asoiaf: 'A Song of Ice and Fire',
+  h2g2: 'Le Guide du voyageur galactique',
+  wot: 'The Wheel of Time',
+}
+
+/** Reconnaît un acronyme exact (insensible à la casse/espaces) et renvoie le titre complet
+ * correspondant, sinon null. Utilisé avant d'interroger les APIs pour élargir des saisies comme
+ * "mha" ou "jjk" que Google Books/AniList ne reconnaîtraient pas telles quelles. */
+export function expandAlias(query: string): string | null {
+  const key = query.trim().toLowerCase()
+  return ALIAS_MAP[key] ?? null
+}
+
 /** Le thumbnail par défaut de Google Books est en zoom=1 avec un effet de coin corné (edge=curl) —
  * minuscule et moche. On demande une résolution plus grande et on vire la décoration. */
 function upgradeGoogleCover(url: string): string {

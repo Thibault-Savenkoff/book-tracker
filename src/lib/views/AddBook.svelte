@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte'
   import { supabase } from '../supabase'
   import { currentView } from '../nav'
-  import { searchByTitle, lookupByIsbn, LookupNetworkError, type BookLookupResult, type SearchLatencies } from '../bookLookup'
+  import { searchByTitle, lookupByIsbn, expandAlias, LookupNetworkError, type BookLookupResult, type SearchLatencies } from '../bookLookup'
   import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
 
@@ -18,6 +18,7 @@
   let searchInputEl = $state<HTMLInputElement | null>(null)
   let results = $state<BookLookupResult[]>([])
   let latencies = $state<SearchLatencies | null>(null)
+  let expandedAliasTo = $state<string | null>(null)
   let searching = $state(false)
   let searchError = $state<string | null>(null)
   let isbnNotFound = $state(false)
@@ -70,17 +71,21 @@
     if (!q) return
     results = []
     latencies = null
+    expandedAliasTo = null
     seriesView = null
     if (looksLikeIsbn(q)) {
       await runIsbnLookup(q)
       return
     }
+    const alias = expandAlias(q)
+    const effectiveQuery = alias ?? q
+    if (alias) expandedAliasTo = alias
     searching = true
     searchError = null
     isbnNotFound = false
     ownedMatch = null
     try {
-      const outcome = await searchByTitle(q)
+      const outcome = await searchByTitle(effectiveQuery)
       results = outcome.results
       latencies = outcome.latencies
     } catch (e) {
@@ -436,6 +441,10 @@
           >
         </button>
       </div>
+
+      {#if expandedAliasTo}
+        <p class="text-[11px] text-slate-400 italic">Recherche étendue pour : « {expandedAliasTo} »</p>
+      {/if}
 
       {#if latencies}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px] font-mono">
