@@ -3,11 +3,14 @@
   import { currentView } from '../nav'
   import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { searchCoverCandidates } from '../bookLookup'
+  import { booksStore } from '../booksStore'
 
   let { id }: { id: string } = $props()
 
   let book = $state<Book | null>(null)
   let saving = $state(false)
+  let deleting = $state(false)
+  let deleteConfirmOpen = $state(false)
   let coverPickerOpen = $state(false)
   let coverLoading = $state(false)
   let coverCandidates = $state<string[]>([])
@@ -57,30 +60,37 @@
   async function save() {
     if (!book) return
     saving = true
-    await supabase
-      .from('books')
-      .update({
-        title: book.title,
-        authors: book.authors,
-        publisher: book.publisher,
-        cover_url: book.cover_url,
-        series: book.series,
-        category: book.category,
-        status: book.status,
-        pages_read: book.pages_read,
-        is_collector_edition: book.is_collector_edition,
-        rating: book.rating,
-        review: book.review,
-        date_read: book.status === 'read' ? (book.date_read ?? new Date().toISOString().slice(0, 10)) : book.date_read,
-      })
-      .eq('id', book.id)
+    const date_read = book.status === 'read' ? (book.date_read ?? new Date().toISOString().slice(0, 10)) : book.date_read
+    const payload = {
+      title: book.title,
+      authors: book.authors,
+      publisher: book.publisher,
+      cover_url: book.cover_url,
+      series: book.series,
+      category: book.category,
+      status: book.status,
+      pages_read: book.pages_read,
+      is_collector_edition: book.is_collector_edition,
+      rating: book.rating,
+      review: book.review,
+      date_read,
+    }
+    const { error } = await supabase.from('books').update(payload).eq('id', book.id)
     saving = false
+    if (error) return
+    const updated = { ...book, ...payload }
+    booksStore.update((list) => list.map((b) => (b.id === updated.id ? updated : b)))
     close()
   }
 
   async function remove() {
-    if (!book || !confirm(`Supprimer "${book.title}" ?`)) return
-    await supabase.from('books').delete().eq('id', book.id)
+    if (!book) return
+    deleting = true
+    const { error } = await supabase.from('books').delete().eq('id', book.id)
+    deleting = false
+    if (error) return
+    booksStore.update((list) => list.filter((b) => b.id !== book!.id))
+    deleteConfirmOpen = false
     close()
   }
 
@@ -287,7 +297,7 @@
       </div>
 
       <div class="flex gap-2 pb-2">
-        <button class="flex-1 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 text-xs font-semibold" onclick={remove}> Supprimer </button>
+        <button class="flex-1 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 text-xs font-semibold" onclick={() => (deleteConfirmOpen = true)}> Supprimer </button>
         <button class="flex-[1.4] py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-60" onclick={save} disabled={saving}>
           {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
@@ -331,6 +341,45 @@
           {/each}
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+{#if deleteConfirmOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4"
+    onclick={() => (deleteConfirmOpen = false)}
+    onkeydown={(e) => e.key === 'Escape' && (deleteConfirmOpen = false)}
+  >
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div
+      class="bg-light-surface dark:bg-app-surface border border-red-500/20 rounded-2xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h3 class="font-serif text-lg font-bold text-red-500">Supprimer cet ouvrage ?</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+        Cette action est irréversible et supprimera également les citations et notes associées.
+      </p>
+      <div class="flex gap-3 mt-1">
+        <button
+          class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-light-border dark:border-app-border text-slate-700 dark:text-slate-300 text-xs font-medium"
+          onclick={() => (deleteConfirmOpen = false)}
+          disabled={deleting}
+        >
+          Annuler
+        </button>
+        <button
+          class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-medium disabled:opacity-60"
+          onclick={remove}
+          disabled={deleting}
+        >
+          {deleting ? 'Suppression…' : 'Supprimer définitivement'}
+        </button>
+      </div>
     </div>
   </div>
 {/if}

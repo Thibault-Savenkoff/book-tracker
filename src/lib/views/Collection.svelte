@@ -6,20 +6,16 @@
   import { booksStore } from '../booksStore'
   import { searchQuery, filterCategory } from '../collectionFilter'
 
-  let books = $state<Book[]>([])
   let loading = $state(true)
+  const books = $derived($booksStore)
 
   async function load() {
     loading = true
     const { data } = await supabase.from('books').select('*').order('date_added', { ascending: false })
-    books = data ?? []
+    booksStore.set(data ?? [])
     loading = false
   }
   load()
-
-  $effect(() => {
-    booksStore.set(books)
-  })
 
   const resultsActive = $derived($searchQuery.trim() !== '' || $filterCategory !== 'Toutes')
 
