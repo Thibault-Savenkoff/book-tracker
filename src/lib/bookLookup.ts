@@ -1,3 +1,5 @@
+export type BookSource = 'Google Books' | 'OpenLibrary' | 'AniList' | 'Comic Vine'
+
 export type BookLookupResult = {
   isbn: string | null
   title: string
@@ -10,6 +12,7 @@ export type BookLookupResult = {
   description?: string | null
   cover_url: string | null
   pages: number | null
+  source?: BookSource
 }
 
 export class LookupNetworkError extends Error {}
@@ -248,6 +251,7 @@ async function searchAniList(query: string): Promise<BookLookupResult[]> {
         cover_url: cover,
         categories: ['Manga'],
         pages: null,
+        source: 'AniList',
       }
       return result
     })
@@ -283,6 +287,7 @@ async function searchComicVine(query: string): Promise<BookLookupResult[]> {
         cover_url: cover,
         categories: ['Comics'],
         pages: null,
+        source: 'Comic Vine',
       }
       return result
     })
@@ -300,22 +305,41 @@ export async function lookupByIsbn(isbn: string): Promise<BookLookupResult | nul
   return null
 }
 
+export type SourceLatency = { ms: number; ok: boolean }
+export type SearchLatencies = Record<'google' | 'openlibrary' | 'anilist' | 'comicvine', SourceLatency>
+
+/** Chronomètre un appel source sans changer son résultat — sert uniquement à afficher un vrai
+ * indicateur de latence par API (pas une valeur inventée) dans l'écran de recherche. */
+async function timed<T>(p: Promise<T>): Promise<{ settled: PromiseSettledResult<T>; latency: SourceLatency }> {
+  const start = performance.now()
+  const settled = await p.then(
+    (value): PromiseFulfilledResult<T> => ({ status: 'fulfilled', value }),
+    (reason): PromiseRejectedResult => ({ status: 'rejected', reason }),
+  )
+  return { settled, latency: { ms: Math.round(performance.now() - start), ok: settled.status === 'fulfilled' } }
+}
+
 /** Google Books est préféré ici (contrairement à lookupByIsbn) : son classement par pertinence
  * est bien meilleur qu'OpenLibrary sur une recherche plein-texte (nom d'auteur, titre partiel...). */
-export async function searchByTitle(query: string): Promise<BookLookupResult[]> {
-  const [ol, gb, al, cv] = await Promise.allSettled([
-    searchOpenLibrary(query),
-    searchGoogleBooks(query),
-    searchAniList(query),
-    searchComicVine(query),
+export async function searchByTitle(query: string): Promise<{ results: BookLookupResult[]; latencies: SearchLatencies }> {
+  const [olT, gbT, alT, cvT] = await Promise.all([
+    timed(searchOpenLibrary(query)),
+    timed(searchGoogleBooks(query)),
+    timed(searchAniList(query)),
+    timed(searchComicVine(query)),
   ])
-  const base = gb.status === 'fulfilled' && gb.value.length > 0 ? gb.value : ol.status === 'fulfilled' ? ol.value : []
+  const ol = olT.settled
+  const gb = gbT.settled
+  const al = alT.settled
+  const cv = cvT.settled
+  const latencies: SearchLatencies = { openlibrary: olT.latency, google: gbT.latency, anilist: alT.latency, comicvine: cvT.latency }
+
+  const gbTagged = gb.status === 'fulfilled' ? gb.value.map((r) => ({ ...r, source: 'Google Books' as const })) : []
+  const olTagged = ol.status === 'fulfilled' ? ol.value.map((r) => ({ ...r, source: 'OpenLibrary' as const })) : []
+  const base = gbTagged.length > 0 ? gbTagged : olTagged
   if (base.length === 0 && ol.status === 'rejected' && gb.status === 'rejected') throw gb.reason
   // AniList et Comic Vine viennent toujours en complément (jamais en remplacement) : signal de
   // catégorie fiable et couvertures nettes, mais aucune notion d'édition/ISBN comme Google/OL.
-  return [
-    ...base,
-    ...(al.status === 'fulfilled' ? al.value : []),
-    ...(cv.status === 'fulfilled' ? cv.value : []),
-  ]
+  const results = [...base, ...(al.status === 'fulfilled' ? al.value : []), ...(cv.status === 'fulfilled' ? cv.value : [])]
+  return { results, latencies }
 }

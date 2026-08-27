@@ -2,8 +2,8 @@
   import { onDestroy } from 'svelte'
   import { supabase } from '../supabase'
   import { currentView } from '../nav'
-  import { searchByTitle, lookupByIsbn, LookupNetworkError, type BookLookupResult } from '../bookLookup'
-  import { CATEGORY_GRADIENT, CATEGORY_LABEL, STATUS_LABEL } from '../bookStyle'
+  import { searchByTitle, lookupByIsbn, LookupNetworkError, type BookLookupResult, type SearchLatencies } from '../bookLookup'
+  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
 
   type Category = keyof typeof CATEGORY_LABEL
@@ -15,7 +15,9 @@
   const seedQuery = initialQuery
 
   let query = $state(seedQuery ?? '')
+  let searchInputEl = $state<HTMLInputElement | null>(null)
   let results = $state<BookLookupResult[]>([])
+  let latencies = $state<SearchLatencies | null>(null)
   let searching = $state(false)
   let searchError = $state<string | null>(null)
   let isbnNotFound = $state(false)
@@ -67,6 +69,7 @@
     const q = query.trim()
     if (!q) return
     results = []
+    latencies = null
     seriesView = null
     if (looksLikeIsbn(q)) {
       await runIsbnLookup(q)
@@ -77,7 +80,9 @@
     isbnNotFound = false
     ownedMatch = null
     try {
-      results = await searchByTitle(q)
+      const outcome = await searchByTitle(q)
+      results = outcome.results
+      latencies = outcome.latencies
     } catch (e) {
       searchError = e instanceof LookupNetworkError ? "Recherche indisponible — vérifie ta connexion." : 'Erreur inattendue.'
     } finally {
@@ -262,19 +267,60 @@
       ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
       : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5'
   }
+
+  const SOURCE_PILLS: { key: keyof SearchLatencies; label: string }[] = [
+    { key: 'google', label: 'Google Books' },
+    { key: 'anilist', label: 'AniList API' },
+    { key: 'openlibrary', label: 'OpenLibrary' },
+    { key: 'comicvine', label: 'Comic Vine' },
+  ]
+
+  $effect(() => {
+    if (!scannerOpen && !seriesView) searchInputEl?.focus()
+  })
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return
+    if (previewItem) previewItem = null
+    else if (seriesView) seriesView = null
+    else if (scannerOpen) stopScanner()
+    else currentView.set({ name: 'collection' })
+  }
 </script>
 
-<div class="pb-10 md:max-w-3xl md:mx-auto">
-  <div class="p-4 md:p-8 space-y-6">
+<svelte:window onkeydown={handleKeydown} />
+
+{#snippet coverFallback(title: string)}
+  <div class="w-full h-full bg-app-card dark:bg-app-card border border-light-border dark:border-app-border flex flex-col items-center justify-center gap-1.5 p-2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="text-slate-500 flex-shrink-0"
+      ><path
+        d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V4a2 2 0 00-2-2H6.5A2.5 2.5 0 004 4.5v15z"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      /></svg
+    >
+    <span class="font-serif text-[10px] font-semibold text-slate-200 text-center px-1 line-clamp-2">{title}</span>
+  </div>
+{/snippet}
+
+<div class="p-4 md:p-8 flex justify-center">
+  <div
+    class="w-full md:max-w-2xl bg-light-surface dark:bg-app-surface md:border md:border-light-border md:dark:border-app-border rounded-2xl md:shadow-2xl p-0 md:p-8 space-y-6"
+  >
     <div class="flex items-center gap-3">
       <button
-        class="w-9 h-9 rounded-lg bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border flex items-center justify-center flex-shrink-0"
+        class="w-9 h-9 rounded-lg bg-light-card dark:bg-app-card border border-light-border dark:border-app-border flex items-center justify-center flex-shrink-0"
         onclick={() => currentView.set({ name: 'collection' })}
         aria-label="Retour"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
-      <h1 class="font-serif text-2xl font-bold text-slate-900 dark:text-white">Recherche fédérée</h1>
+      <div>
+        <span class="text-[11px] font-mono uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Supabase Edge Proxy Dispatcher</span>
+        <h1 class="font-serif text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Recherche fédérée</h1>
+      </div>
     </div>
 
     {#if scannerOpen}
@@ -349,10 +395,7 @@
           {@const match = foundVolume(seriesView, n)}
           <div class="flex flex-col items-center gap-1.5">
             <div class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border">
-              {#if match?.cover_url}<img src={match.cover_url} alt="Tome {n}" class="w-full h-full object-cover" />{:else}<div
-                  class="w-full h-full"
-                  style="background:{CATEGORY_GRADIENT[seriesCategory]}"
-                ></div>{/if}
+              {#if match?.cover_url}<img src={match.cover_url} alt="Tome {n}" class="w-full h-full object-cover" />{:else}{@render coverFallback(`T${n}`)}{/if}
             </div>
             <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">T{n}</div>
           </div>
@@ -366,22 +409,23 @@
         Ajouter les tomes {Math.min(seriesFrom, seriesTo)} à {Math.max(seriesFrom, seriesTo)}
       </button>
     {:else}
-      <div class="flex items-center gap-2 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="text-indigo-600 dark:text-indigo-400 flex-shrink-0"
+      <div class="relative">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="text-indigo-600 dark:text-indigo-400 absolute left-4 top-1/2 -translate-y-1/2"
           ><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" /><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
         >
         <input
-          placeholder="Titre, auteur ou ISBN"
+          bind:this={searchInputEl}
+          placeholder="Titre, auteur, ISBN…"
           bind:value={query}
           onkeydown={(e) => e.key === 'Enter' && runSearch()}
-          class="flex-1 bg-transparent outline-none text-sm text-slate-900 dark:text-white placeholder-slate-400"
+          class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border focus:border-indigo-500 rounded-xl py-3.5 pl-12 pr-12 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none transition"
         />
         <button
-          class="w-8 h-8 rounded-full bg-light-card dark:bg-app-card flex items-center justify-center flex-shrink-0 text-slate-500 dark:text-slate-400"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border flex items-center justify-center text-slate-500 dark:text-slate-400"
           onclick={openScanner}
           aria-label="Scanner un code-barre"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
             ><path
               d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"
               stroke="currentColor"
@@ -392,6 +436,31 @@
           >
         </button>
       </div>
+
+      {#if latencies}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px] font-mono">
+          {#each SOURCE_PILLS as p (p.key)}
+            {@const lat = latencies[p.key]}
+            {@const isProxy = p.key === 'comicvine'}
+            <div
+              class={`p-2.5 rounded-lg border flex items-center justify-between ${
+                isProxy ? 'bg-indigo-50 dark:bg-app-card border-indigo-200 dark:border-indigo-500/30' : 'bg-light-card dark:bg-app-card border-light-border dark:border-app-border'
+              }`}
+            >
+              <span class={`flex items-center gap-1.5 ${isProxy ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                <span class={`w-1.5 h-1.5 rounded-full ${lat.ok ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                {p.label}
+              </span>
+              {#if isProxy}
+                <span class="text-indigo-600 dark:text-indigo-400 font-semibold">Proxy ✓</span>
+              {:else}
+                <span class={lat.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}>{lat.ms}ms</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+
       {#if searching}<p class="text-sm text-slate-400">Recherche…</p>{/if}
       {#if searchError}<p class="text-sm text-red-500">{searchError}</p>{/if}
       {#if !searching && !searchError && query.trim() && results.length === 0 && !isbnNotFound && !ownedMatch}<p class="text-sm text-slate-400">Aucun résultat.</p>{/if}
@@ -406,7 +475,10 @@
           <button class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold flex-shrink-0" onclick={() => currentView.set({ name: 'book', id: ownedMatch!.id })}>Voir</button>
         </div>
       {/if}
-      <div class="flex flex-col gap-2">
+      {#if groups.length > 0}
+        <span class="text-[11px] font-mono text-slate-400 dark:text-slate-500 uppercase tracking-wider">Résultats disponibles</span>
+      {/if}
+      <div class="flex flex-col gap-2.5">
         {#each groups as g (g.series)}
           {#if g.items.length > 1}
             <div
@@ -416,15 +488,15 @@
               onclick={() => openSeries(g)}
               onkeydown={(e) => e.key === 'Enter' && openSeries(g)}
             >
-              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
-                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} class="w-full h-full object-cover" />{:else}<div
-                    class="w-full h-full"
-                    style="background:{CATEGORY_GRADIENT.roman}"
-                  ></div>{/if}
+              <div class="w-12 aspect-[2/3] rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
+                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} class="w-full h-full object-cover" />{:else}{@render coverFallback(g.series)}{/if}
               </div>
               <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${CATEGORY_BADGE_CLASS[guessCategory(g.items)]}`}>{CATEGORY_LABEL[guessCategory(g.items)].toUpperCase()}</span>
+                </div>
                 <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{g.series}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">{g.items.length} tomes trouvés</div>
+                <div class="text-xs text-slate-400">{g.items.length} tomes trouvés</div>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="text-slate-400 flex-shrink-0"
                 ><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
@@ -432,6 +504,7 @@
             </div>
           {:else}
             {@const r = g.items[0]}
+            {@const cat = guessCategory([r])}
             <div
               class="flex items-center gap-3 p-3 rounded-xl bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border cursor-pointer"
               role="button"
@@ -439,24 +512,29 @@
               onclick={() => openPreview(r)}
               onkeydown={(e) => e.key === 'Enter' && openPreview(r)}
             >
-              <div class="w-11 h-16 rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
-                {#if r.cover_url}<img src={r.cover_url} alt={r.title} class="w-full h-full object-cover" />{:else}<div class="w-full h-full" style="background:{CATEGORY_GRADIENT.roman}"></div>{/if}
+              <div class="w-12 aspect-[2/3] rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
+                {#if r.cover_url}<img src={r.cover_url} alt={r.title} class="w-full h-full object-cover" />{:else}{@render coverFallback(r.title)}{/if}
               </div>
               <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${CATEGORY_BADGE_CLASS[cat]}`}>{CATEGORY_LABEL[cat].toUpperCase()}</span>
+                  {#if r.source}<span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">{r.source}</span>{/if}
+                </div>
                 <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{r.title}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{r.authors.join(', ')}</div>
+                <div class="text-xs text-slate-400 truncate">
+                  {r.authors.join(', ') || 'Auteur inconnu'}{r.pages ? ` • ${r.pages} p.` : ''}{r.publishedDate ? ` • ${r.publishedDate.slice(0, 4)}` : ''}
+                </div>
               </div>
               <button
-                class="w-8 h-8 rounded-full bg-indigo-600 text-white text-lg font-semibold flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+                class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-medium flex-shrink-0 disabled:opacity-50"
                 onclick={(e) => {
                   e.stopPropagation()
                   const pv = parseSeriesVolume(r.title)
-                  addBook(r, guessCategory([r]), 'wishlist', pv.volume ? pv.series : null)
+                  addBook(r, cat, 'wishlist', pv.volume ? pv.series : null)
                 }}
                 disabled={adding}
-                aria-label="Ajouter"
               >
-                +
+                Importer
               </button>
             </div>
           {/if}
@@ -487,10 +565,7 @@
         ✕
       </button>
       <div class="w-24 h-36 rounded-xl overflow-hidden bg-light-card dark:bg-app-card mx-auto mb-1 cover-shadow">
-        {#if previewItem.cover_url}<img src={previewItem.cover_url} alt={previewItem.title} class="w-full h-full object-cover" />{:else}<div
-            class="w-full h-full"
-            style="background:{CATEGORY_GRADIENT[previewCategory]}"
-          ></div>{/if}
+        {#if previewItem.cover_url}<img src={previewItem.cover_url} alt={previewItem.title} class="w-full h-full object-cover" />{:else}{@render coverFallback(previewItem.title)}{/if}
       </div>
       <div class="font-serif text-xl font-bold text-slate-900 dark:text-white text-center">{previewItem.title}</div>
       {#if previewItem.subtitle}<div class="text-sm text-slate-500 dark:text-slate-400 text-center -mt-1.5">{previewItem.subtitle}</div>{/if}
