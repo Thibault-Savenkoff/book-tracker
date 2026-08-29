@@ -46,11 +46,15 @@
   let isSearchingVolume = $state<Record<number, boolean>>({})
   let excludedVolumes = $state<Set<number>>(new Set())
   let collectorVolumes = $state<Set<number>>(new Set())
+  let volumeIsbnOverride = $state<Record<number, BookLookupResult>>({})
   let volumePicker = $state<number | null>(null)
   let volumePickerCandidates = $state<string[]>([])
   let volumePickerLoading = $state(false)
   let volumePickerQuery = $state('')
   let volumePickerUrlInput = $state('')
+  let volumePickerScanning = $state(false)
+  let volumeHtml5QrCode: import('html5-qrcode').Html5Qrcode | null = null
+  let volumeScanDecoded = false
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
@@ -210,6 +214,7 @@
     seriesCovers = {}
     excludedVolumes = new Set()
     collectorVolumes = new Set()
+    volumeIsbnOverride = {}
     const volumes = g.items.map((r) => parseSeriesVolume(r.title).volume).filter((v): v is number => v !== null)
     seriesFrom = 1
     seriesTo = volumes.length ? Math.max(...volumes) : g.items.length
@@ -303,7 +308,58 @@
   function applyVolumeCover(url: string) {
     if (volumePicker === null) return
     seriesCovers = { ...seriesCovers, [volumePicker]: [url] }
+    closeVolumePicker()
+  }
+
+  function stopVolumeScanner() {
+    if (volumeHtml5QrCode) {
+      volumeHtml5QrCode.stop().catch(() => {})
+      volumeHtml5QrCode = null
+    }
+    volumePickerScanning = false
+  }
+
+  function closeVolumePicker() {
+    stopVolumeScanner()
     volumePicker = null
+  }
+
+  async function openVolumeScanner() {
+    if (volumePicker === null) return
+    volumePickerScanning = true
+    volumeScanDecoded = false
+    const { Html5Qrcode } = await import('html5-qrcode')
+    volumeHtml5QrCode = new Html5Qrcode('volume-scanner')
+    try {
+      await volumeHtml5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 120 } },
+        (decodedText) => {
+          if (volumeScanDecoded) return
+          volumeScanDecoded = true
+          volumeHtml5QrCode?.pause(true)
+          applyVolumeScan(decodedText)
+        },
+        () => {},
+      )
+    } catch {
+      volumePickerScanning = false
+    }
+  }
+
+  /** Le code-barre identifie l'édition exacte que l'utilisateur a en main (ISBN propre à chaque
+   * édition, collector incluse) — pas d'ambiguïté possible, contrairement à une recherche par
+   * mots-clés : on applique directement, sans passer par une liste de candidats à trier. */
+  async function applyVolumeScan(isbn: string) {
+    if (volumePicker === null) return
+    const n = volumePicker
+    const result = await lookupByIsbn(isbn)
+    stopVolumeScanner()
+    if (result) {
+      volumeIsbnOverride = { ...volumeIsbnOverride, [n]: result }
+      if (result.cover_url) seriesCovers = { ...seriesCovers, [n]: [result.cover_url, ...(seriesCovers[n] ?? [])] }
+      volumePicker = null
+    }
   }
 
   function toggleVolumeIncluded(n: number) {
@@ -334,17 +390,21 @@
     const { data: userData } = await supabase.auth.getUser()
     for (const n of seriesVolumeList) {
       if (excludedVolumes.has(n)) continue
+      // Un scan de code-barre (volumeIsbnOverride) identifie l'édition exacte possédée — il prime
+      // sur le résultat de recherche générique, qui peut être une autre édition du même tome.
+      const override = volumeIsbnOverride[n]
       const match = foundVolume(seriesView, n)
       const isCollector = collectorVolumes.has(n)
-      const base: BookLookupResult = match ?? {
+      const base: BookLookupResult = override ?? match ?? {
         isbn: null,
         title: `${seriesView.series} Tome ${n}`,
         authors: seriesView.items[0].authors,
         publisher: seriesView.items[0].publisher,
-        cover_url: seriesCovers[n]?.[0] ?? null,
+        cover_url: null,
         pages: null,
       }
-      const toInsert = isCollector ? { ...base, title: `${base.title} (Édition collector)` } : base
+      const withCover = { ...base, cover_url: seriesCovers[n]?.[0] ?? base.cover_url }
+      const toInsert = isCollector ? { ...withCover, title: `${withCover.title} (Édition collector)` } : withCover
       await insertBook(toInsert, userData.user?.id, seriesCategory, seriesStatus, seriesView.series)
     }
     adding = false
@@ -422,7 +482,7 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return
-    if (volumePicker !== null) volumePicker = null
+    if (volumePicker !== null) closeVolumePicker()
     else if (previewItem) previewItem = null
     else if (seriesView) seriesView = null
     else if (scannerOpen) stopScanner()
@@ -810,19 +870,38 @@
 {/if}
 
 {#if volumePicker !== null}
-  <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" role="presentation" onclick={() => (volumePicker = null)}>
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" role="presentation" onclick={closeVolumePicker}>
     <div
       class="w-full sm:max-w-md max-h-[78vh] flex flex-col rounded-t-2xl sm:rounded-2xl p-4 gap-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && (volumePicker = null)}
+      onkeydown={(e) => e.key === 'Escape' && closeVolumePicker()}
     >
       <div class="flex items-center justify-between font-serif font-bold text-base text-slate-900 dark:text-white">
         <span>Couverture — Tome {volumePicker}</span>
-        <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (volumePicker = null)} aria-label="Fermer">✕</button>
+        <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={closeVolumePicker} aria-label="Fermer">✕</button>
       </div>
+      {#if volumePickerScanning}
+        <div class="relative w-full aspect-square rounded-2xl bg-black overflow-hidden border border-light-border dark:border-app-border">
+          <div id="volume-scanner" class="w-full h-full"></div>
+        </div>
+        <button class="w-full py-2.5 rounded-xl border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-sm font-medium" onclick={stopVolumeScanner}>
+          Annuler le scan
+        </button>
+      {:else}
+        <button
+          class="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-app-card border border-light-border dark:border-app-border text-white dark:text-slate-100 text-sm font-semibold flex items-center justify-center gap-2"
+          onclick={openVolumeScanner}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            ><path d="M4 7V5a1 1 0 011-1h2M4 17v2a1 1 0 001 1h2M20 7V5a1 1 0 00-1-1h-2M20 17v2a1 1 0 01-1 1h-2M7 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
+          >
+          Scanner le code-barre de ton exemplaire
+        </button>
+        <p class="text-[11px] text-slate-400 text-center -mt-2">Identifie l'édition exacte que tu as en main — plus fiable qu'une recherche par mots-clés.</p>
+      {/if}
       <form
         class="flex gap-2"
         onsubmit={(e) => {
