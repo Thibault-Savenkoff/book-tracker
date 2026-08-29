@@ -289,11 +289,15 @@
     excludedVolumes = s
   }
 
+  // L'édition collector a presque toujours une jaquette différente de l'édition standard —
+  // cocher ★ doit donc immédiatement proposer cette couverture, pas juste taguer le titre.
   function toggleVolumeCollector(n: number) {
     const s = new Set(collectorVolumes)
-    if (s.has(n)) s.delete(n)
-    else s.add(n)
+    const turningOn = !s.has(n)
+    if (turningOn) s.add(n)
+    else s.delete(n)
     collectorVolumes = s
+    if (turningOn) pickVolumeCover(n)
   }
 
   // Nombre de tomes réellement ajoutés : la plage moins ce que l'utilisateur a décoché (déjà possédé,
