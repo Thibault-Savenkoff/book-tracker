@@ -229,13 +229,12 @@ async function searchGoogleBooksCoversTitled(query: string): Promise<{ title: st
 
 /** Une recherche par mots-clés (OpenLibrary/Google Books) remonte parfois des titres sans aucun
  * rapport (un magazine "Indianapolis Monthly #34" pour "My Hero Academia Tome 34") — on exige donc
- * que le titre candidat contienne les mots significatifs de la série avant de garder sa couverture. */
-function isRelevantTitle(title: string, seriesQuery: string): boolean {
-  const bare = seriesQuery
-    .replace(/intitle:/gi, '')
-    .replace(/"/g, '')
-    .replace(/\s*(tome|vol\.?|volume)\s*\d+/gi, '')
-    .trim()
+ * que le titre candidat contienne les mots du VRAI titre (titleHint, fourni par l'appelant) avant de
+ * garder sa couverture. Ne pas dériver ce filtre de la requête de recherche elle-même : elle contient
+ * souvent des mots annexes (auteurs, "édition collector"...) qui n'apparaissent jamais dans un titre
+ * de catalogue et rendraient le filtre trop strict (plus aucun résultat, même les bons). */
+function isRelevantTitle(title: string, titleHint: string): boolean {
+  const bare = titleHint.replace(/\s*(tome|vol\.?|volume)\s*\d+/gi, '').trim()
   const words = normalizeTitle(bare)
     .split(' ')
     .filter((w) => w.length > 2)
@@ -248,11 +247,11 @@ function isRelevantTitle(title: string, seriesQuery: string): boolean {
  * l'utilisateur choisir, comme le sélecteur de poster de Letterboxd. On interroge aussi le titre
  * sans le numéro de tome (sans restriction de langue) : un tome isolé d'une série peu connue ne
  * remonte souvent qu'un seul résultat sinon. */
-async function coversFor(query: string): Promise<string[]> {
+async function coversFor(query: string, titleHint: string): Promise<string[]> {
   const [ol, gb] = await Promise.allSettled([searchOpenLibrary(query), searchGoogleBooksCoversTitled(query)])
   return [
-    ...(ol.status === 'fulfilled' ? ol.value.filter((r) => isRelevantTitle(r.title, query)).map((r) => r.cover_url) : []),
-    ...(gb.status === 'fulfilled' ? gb.value.filter((r) => isRelevantTitle(r.title, query)).flatMap((r) => r.covers) : []),
+    ...(ol.status === 'fulfilled' ? ol.value.filter((r) => isRelevantTitle(r.title, titleHint)).map((r) => r.cover_url) : []),
+    ...(gb.status === 'fulfilled' ? gb.value.filter((r) => isRelevantTitle(r.title, titleHint)).flatMap((r) => r.covers) : []),
   ].filter((u): u is string => !!u)
 }
 
@@ -270,15 +269,16 @@ async function coversForIsbn(isbn: string): Promise<string[]> {
  * Piece...), l'enlever ramène toutes les couvertures de tous les tomes plus des faux positifs
  * (magazines, artbooks) — inutilisable. On n'élargit sur le titre nu que si la recherche stricte
  * est trop pauvre (< 4 résultats), typique d'un tome isolé peu indexé. */
-export async function searchCoverCandidates(query: string, isbn?: string | null): Promise<string[]> {
+export async function searchCoverCandidates(query: string, isbn?: string | null, titleHint?: string): Promise<string[]> {
   const byIsbn = isbn ? await coversForIsbn(isbn) : []
   if (byIsbn.length > 0) return [...new Set(byIsbn)].slice(0, 16)
 
-  const strict = await coversFor(query)
+  const hint = titleHint ?? query
+  const strict = await coversFor(query, hint)
   const bareQuery = query.replace(/[-–:]?\s*(tome|vol\.?|volume)\s*\d+/i, '').trim()
   let all = strict
   if (new Set(strict).size < 4 && bareQuery && bareQuery !== query) {
-    all = [...strict, ...(await coversFor(bareQuery))]
+    all = [...strict, ...(await coversFor(bareQuery, hint))]
   }
   return [...new Set(all)].slice(0, 16)
 }

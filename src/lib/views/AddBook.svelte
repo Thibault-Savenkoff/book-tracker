@@ -275,7 +275,7 @@
     volumePicker = n
     volumePickerLoading = true
     const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
-    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}${suffix}`)
+    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}${suffix}`, null, seriesView.series)
     volumePickerLoading = false
   }
 

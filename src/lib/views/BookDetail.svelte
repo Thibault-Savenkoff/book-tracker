@@ -23,7 +23,7 @@
   async function openCoverPicker() {
     if (!book) return
     coverLoading = true
-    const results = await searchCoverCandidates(`${book.title} ${book.authors.join(' ')}`, book.isbn)
+    const results = await searchCoverCandidates(`${book.title} ${book.authors.join(' ')}`, book.isbn, book.title)
     coverLoading = false
     if (results.length <= 1) {
       if (results[0]) book.cover_url = results[0]
