@@ -325,12 +325,19 @@ export async function fetchMangaDexCovers(seriesTitle: string): Promise<MangaDex
     const mangaId = best?.id
     if (!mangaId) return {}
     const covers = await fetchJson(`https://api.mangadex.org/cover?manga[]=${mangaId}&limit=100`)
+    // MangaDex héberge les couvertures de plusieurs éditions (locales) pour un même tome —
+    // sans filtre on obtient un mélange JP/FR/EN selon l'ordre de réponse. On préfère la VF.
+    const localeRank = (locale: string | undefined) => (locale === 'fr' ? 2 : locale === 'ja' ? 0 : 1)
     const map: MangaDexCoverMap = {}
+    const mapRank: Record<number, number> = {}
     for (const c of covers?.data ?? []) {
       const vol = Number(c?.attributes?.volume)
       const fileName = c?.attributes?.fileName
       if (!fileName || !Number.isFinite(vol)) continue
+      const rank = localeRank(c?.attributes?.locale)
+      if (map[vol] !== undefined && rank <= mapRank[vol]) continue
       map[vol] = `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.256.jpg`
+      mapRank[vol] = rank
     }
     return map
   } catch {
