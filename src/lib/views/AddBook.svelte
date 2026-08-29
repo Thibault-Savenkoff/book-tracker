@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import { supabase } from '../supabase'
   import { currentView } from '../nav'
   import {
@@ -41,7 +41,7 @@
   let seriesStatus = $state<Status>('wishlist')
   let seriesFrom = $state(1)
   let seriesTo = $state(1)
-  let seriesCovers = $state<Record<number, string>>({})
+  let seriesCovers = $state<Record<number, string[]>>({})
   let seriesCoversLoading = $state(false)
   let isSearchingVolume = $state<Record<number, boolean>>({})
   let excludedVolumes = $state<Set<number>>(new Set())
@@ -241,14 +241,14 @@
    * (vérifié : 20 résultats sur 42 tomes réels) — on cible donc explicitement "Tome N" pour
    * chaque tome resté sans couverture (ni résultat de recherche, ni MangaDex). */
   async function loadMissingCover(seriesTitle: string, volNumber: number) {
-    if (seriesCovers[volNumber] || isSearchingVolume[volNumber]) return
+    if (seriesCovers[volNumber]?.length || isSearchingVolume[volNumber]) return
     isSearchingVolume[volNumber] = true
     try {
       const q = encodeURIComponent(`intitle:"${seriesTitle}" "tome ${volNumber}"`)
       const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`)
       const data = await res.json()
       const img = data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail
-      if (img) seriesCovers[volNumber] = img.replace('http://', 'https://')
+      if (img) seriesCovers[volNumber] = [img.replace('http://', 'https://')]
     } catch (e) {
       console.error(`Erreur cover T${volNumber}`, e)
     } finally {
@@ -259,23 +259,32 @@
   /** Par lots de 5 en parallèle plutôt que tout d'un coup : évite de saturer l'API Google Books
    * sur une grande plage (ex. 1 à 42) et de se faire rate-limiter. */
   async function loadMissingCoversBatched(g: { series: string; items: BookLookupResult[] }, volumes: number[]) {
-    const missing = volumes.filter((n) => !foundVolume(g, n)?.cover_url && !seriesCovers[n] && !isSearchingVolume[n])
+    const missing = volumes.filter((n) => !foundVolume(g, n)?.cover_url && !seriesCovers[n]?.length && !isSearchingVolume[n])
     for (let i = 0; i < missing.length; i += 5) {
       await Promise.all(missing.slice(i, i + 5).map((n) => loadMissingCover(g.series, n)))
     }
   }
 
+  // untrack : cet effet ne doit se redéclencher que quand la plage de tomes change, pas à chaque
+  // couverture trouvée (loadMissingCover écrit dans seriesCovers/isSearchingVolume, lus par le
+  // filtre de loadMissingCoversBatched — sans untrack, ça re-déclenche l'effet des dizaines de fois).
   $effect(() => {
-    if (seriesView && seriesVolumeList.length) loadMissingCoversBatched(seriesView, seriesVolumeList)
+    if (seriesView && seriesVolumeList.length) {
+      const g = seriesView
+      const vols = seriesVolumeList
+      untrack(() => loadMissingCoversBatched(g, vols))
+    }
   })
 
   /** Cliquer sur la vignette permet de remplacer la couverture manuellement à tout moment (pas
    * seulement si elle manque) — utile pour une édition collector qui n'a pas la même couverture.
-   * La requête reste éditable (éditeur, "coffret"...) : la recherche auto ne devine pas toujours
-   * la bonne édition (ex : Google Books ne connaît souvent que l'édition standard, pas la collector). */
+   * Les alternatives MangaDex déjà récupérées (fr/ja) sont de vraies jaquettes de CE tome — on les
+   * propose d'abord, Google Books ne sert qu'à compléter (il ne connaît souvent que l'édition
+   * standard, jamais une collector, et ses résultats sans rapport ont déjà fait plus de mal que de bien). */
   async function pickVolumeCover(n: number) {
     if (!seriesView) return
     volumePicker = n
+    volumePickerCandidates = seriesCovers[n] ?? []
     const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
     volumePickerQuery = `${seriesView.series} Tome ${n}${suffix}`
     await runVolumePickerSearch()
@@ -284,13 +293,14 @@
   async function runVolumePickerSearch() {
     if (!seriesView || volumePicker === null || !volumePickerQuery.trim()) return
     volumePickerLoading = true
-    volumePickerCandidates = await searchCoverCandidates(volumePickerQuery, null, seriesView.series)
+    const extra = await searchCoverCandidates(volumePickerQuery, null, seriesView.series)
+    volumePickerCandidates = [...new Set([...(seriesCovers[volumePicker] ?? []), ...extra])]
     volumePickerLoading = false
   }
 
   function applyVolumeCover(url: string) {
     if (volumePicker === null) return
-    seriesCovers = { ...seriesCovers, [volumePicker]: url }
+    seriesCovers = { ...seriesCovers, [volumePicker]: [url] }
     volumePicker = null
   }
 
@@ -329,7 +339,7 @@
         title: `${seriesView.series} Tome ${n}`,
         authors: seriesView.items[0].authors,
         publisher: seriesView.items[0].publisher,
-        cover_url: seriesCovers[n] ?? null,
+        cover_url: seriesCovers[n]?.[0] ?? null,
         pages: null,
       }
       const toInsert = isCollector ? { ...base, title: `${base.title} (Édition collector)` } : base
@@ -527,7 +537,7 @@
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
         {#each seriesVolumeList as n (n)}
           {@const match = foundVolume(seriesView, n)}
-          {@const cover = match?.cover_url ?? seriesCovers[n]}
+          {@const cover = match?.cover_url ?? seriesCovers[n]?.[0]}
           {@const searching = isSearchingVolume[n]}
           {@const excluded = excludedVolumes.has(n)}
           {@const collector = collectorVolumes.has(n)}

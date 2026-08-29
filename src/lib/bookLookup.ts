@@ -334,12 +334,15 @@ export async function getSeriesVolumeCount(seriesTitle: string): Promise<number 
   }
 }
 
-export type MangaDexCoverMap = Record<number, string>
+// Un tome a souvent plusieurs jaquettes sur MangaDex (une par langue d'édition : fr, ja...) — ce
+// sont de vraies alternatives (contrairement au bruit d'une recherche par mots-clés), on les garde
+// toutes plutôt que d'en jeter une, la VF passant en premier (choix par défaut le plus pertinent ici).
+export type MangaDexCoverMap = Record<number, string[]>
 
 /** MangaDex expose gratuitement, sans clé ni CORS, la couverture officielle de chaque tome d'une
- * série en un seul appel — contrairement à Google Books qui ne renvoie qu'un échantillon partiel
- * et désordonné (vérifié : 20 résultats sur 42 tomes réels, non consécutifs). Échoue en silence
- * (renvoie {}) : c'est un complément, pas une dépendance bloquante pour l'écran de série. */
+ * série — contrairement à Google Books qui ne renvoie qu'un échantillon partiel et désordonné
+ * (vérifié : 20 résultats sur 42 tomes réels, non consécutifs). Échoue en silence (renvoie {}) :
+ * c'est un complément, pas une dépendance bloquante pour l'écran de série. */
 export async function fetchMangaDexCovers(seriesTitle: string): Promise<MangaDexCoverMap> {
   try {
     const search = await fetchJson(`https://api.mangadex.org/manga?title=${encodeURIComponent(seriesTitle)}&limit=10`)
@@ -350,20 +353,29 @@ export async function fetchMangaDexCovers(seriesTitle: string): Promise<MangaDex
     ])
     const mangaId = best?.id
     if (!mangaId) return {}
-    const covers = await fetchJson(`https://api.mangadex.org/cover?manga[]=${mangaId}&limit=100`)
-    // MangaDex héberge les couvertures de plusieurs éditions (locales) pour un même tome —
-    // sans filtre on obtient un mélange JP/FR/EN selon l'ordre de réponse. On préfère la VF.
-    const localeRank = (locale: string | undefined) => (locale === 'fr' ? 2 : locale === 'ja' ? 0 : 1)
-    const map: MangaDexCoverMap = {}
-    const mapRank: Record<number, number> = {}
-    for (const c of covers?.data ?? []) {
+
+    // Une longue série (One Piece...) peut dépasser les 100 couvertures max par page (plusieurs
+    // langues x nombreux tomes) — paginer, sinon les derniers tomes perdent silencieusement leur VF.
+    const covers: { attributes: { volume?: string; fileName?: string; locale?: string } }[] = []
+    for (let offset = 0; offset < 1000; offset += 100) {
+      const page = await fetchJson(`https://api.mangadex.org/cover?manga[]=${mangaId}&limit=100&offset=${offset}`)
+      covers.push(...(page?.data ?? []))
+      if (!page?.total || covers.length >= page.total) break
+    }
+
+    const localeRank = (locale: string | undefined) => (locale === 'fr' ? 0 : locale === 'ja' ? 1 : 2)
+    const byVolume = new Map<number, { url: string; rank: number }[]>()
+    for (const c of covers) {
       const vol = Number(c?.attributes?.volume)
       const fileName = c?.attributes?.fileName
       if (!fileName || !Number.isFinite(vol)) continue
+      const url = `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.256.jpg`
       const rank = localeRank(c?.attributes?.locale)
-      if (map[vol] !== undefined && rank <= mapRank[vol]) continue
-      map[vol] = `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.256.jpg`
-      mapRank[vol] = rank
+      byVolume.set(vol, [...(byVolume.get(vol) ?? []), { url, rank }])
+    }
+    const map: MangaDexCoverMap = {}
+    for (const [vol, entries] of byVolume) {
+      map[vol] = entries.sort((a, b) => a.rank - b.rank).map((e) => e.url)
     }
     return map
   } catch {
