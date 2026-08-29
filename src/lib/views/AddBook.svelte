@@ -49,6 +49,7 @@
   let volumePicker = $state<number | null>(null)
   let volumePickerCandidates = $state<string[]>([])
   let volumePickerLoading = $state(false)
+  let volumePickerQuery = $state('')
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
@@ -269,13 +270,21 @@
   })
 
   /** Cliquer sur la vignette permet de remplacer la couverture manuellement à tout moment (pas
-   * seulement si elle manque) — utile pour une édition collector qui n'a pas la même couverture. */
+   * seulement si elle manque) — utile pour une édition collector qui n'a pas la même couverture.
+   * La requête reste éditable (éditeur, "coffret"...) : la recherche auto ne devine pas toujours
+   * la bonne édition (ex : Google Books ne connaît souvent que l'édition standard, pas la collector). */
   async function pickVolumeCover(n: number) {
     if (!seriesView) return
     volumePicker = n
-    volumePickerLoading = true
     const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
-    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}${suffix}`, null, seriesView.series)
+    volumePickerQuery = `${seriesView.series} Tome ${n}${suffix}`
+    await runVolumePickerSearch()
+  }
+
+  async function runVolumePickerSearch() {
+    if (!seriesView || volumePicker === null || !volumePickerQuery.trim()) return
+    volumePickerLoading = true
+    volumePickerCandidates = await searchCoverCandidates(volumePickerQuery, null, seriesView.series)
     volumePickerLoading = false
   }
 
@@ -802,6 +811,23 @@
         <span>Couverture — Tome {volumePicker}</span>
         <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (volumePicker = null)} aria-label="Fermer">✕</button>
       </div>
+      <form
+        class="flex gap-2"
+        onsubmit={(e) => {
+          e.preventDefault()
+          runVolumePickerSearch()
+        }}
+      >
+        <input
+          type="text"
+          bind:value={volumePickerQuery}
+          placeholder="Éditeur, coffret, deluxe…"
+          class="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white"
+        />
+        <button type="submit" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex-shrink-0" disabled={volumePickerLoading}>
+          Chercher
+        </button>
+      </form>
       {#if volumePickerLoading}
         <p class="text-center text-sm text-slate-400 py-5">Recherche…</p>
       {:else if volumePickerCandidates.length === 0}
