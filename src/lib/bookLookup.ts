@@ -218,15 +218,41 @@ async function searchGoogleBooksCoversRaw(query: string): Promise<string[]> {
   )
 }
 
+async function searchGoogleBooksCoversTitled(query: string): Promise<{ title: string; covers: string[] }[]> {
+  const key = GOOGLE_BOOKS_KEY ? `&key=${GOOGLE_BOOKS_KEY}` : ''
+  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40${key}`)
+  return (data?.items ?? []).map((item: { volumeInfo?: { title?: string; imageLinks?: GoogleImageLinks } }) => ({
+    title: item.volumeInfo?.title ?? '',
+    covers: bestGoogleCovers(item.volumeInfo?.imageLinks),
+  }))
+}
+
+/** Une recherche par mots-clés (OpenLibrary/Google Books) remonte parfois des titres sans aucun
+ * rapport (un magazine "Indianapolis Monthly #34" pour "My Hero Academia Tome 34") — on exige donc
+ * que le titre candidat contienne les mots significatifs de la série avant de garder sa couverture. */
+function isRelevantTitle(title: string, seriesQuery: string): boolean {
+  const bare = seriesQuery
+    .replace(/intitle:/gi, '')
+    .replace(/"/g, '')
+    .replace(/\s*(tome|vol\.?|volume)\s*\d+/gi, '')
+    .trim()
+  const words = normalizeTitle(bare)
+    .split(' ')
+    .filter((w) => w.length > 2)
+  if (!words.length) return true
+  const t = normalizeTitle(title)
+  return words.every((w) => t.includes(w))
+}
+
 /** Toutes les couvertures trouvées par les deux sources (pas juste la meilleure) — pour laisser
  * l'utilisateur choisir, comme le sélecteur de poster de Letterboxd. On interroge aussi le titre
  * sans le numéro de tome (sans restriction de langue) : un tome isolé d'une série peu connue ne
  * remonte souvent qu'un seul résultat sinon. */
 async function coversFor(query: string): Promise<string[]> {
-  const [ol, gb] = await Promise.allSettled([searchOpenLibrary(query), searchGoogleBooksCoversRaw(query)])
+  const [ol, gb] = await Promise.allSettled([searchOpenLibrary(query), searchGoogleBooksCoversTitled(query)])
   return [
-    ...(ol.status === 'fulfilled' ? ol.value.map((r) => r.cover_url) : []),
-    ...(gb.status === 'fulfilled' ? gb.value : []),
+    ...(ol.status === 'fulfilled' ? ol.value.filter((r) => isRelevantTitle(r.title, query)).map((r) => r.cover_url) : []),
+    ...(gb.status === 'fulfilled' ? gb.value.filter((r) => isRelevantTitle(r.title, query)).flatMap((r) => r.covers) : []),
   ].filter((u): u is string => !!u)
 }
 
