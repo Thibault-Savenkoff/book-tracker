@@ -669,7 +669,7 @@
                   <span class={`px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${CATEGORY_BADGE_CLASS[guessCategory(g.items)]}`}>{CATEGORY_LABEL[guessCategory(g.items)].toUpperCase()}</span>
                 </div>
                 <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{g.series}</div>
-                <div class="text-xs text-slate-400">{g.items.length} tomes trouvés</div>
+                <div class="text-xs text-slate-400">{g.items.length} résultat{g.items.length > 1 ? 's' : ''} (au moins)</div>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="text-slate-400 flex-shrink-0"
                 ><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg
