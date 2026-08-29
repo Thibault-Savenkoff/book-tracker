@@ -44,6 +44,8 @@
   let seriesCovers = $state<Record<number, string>>({})
   let seriesCoversLoading = $state(false)
   let isSearchingVolume = $state<Record<number, boolean>>({})
+  let excludedVolumes = $state<Set<number>>(new Set())
+  let collectorVolumes = $state<Set<number>>(new Set())
   let volumePicker = $state<number | null>(null)
   let volumePickerCandidates = $state<string[]>([])
   let volumePickerLoading = $state(false)
@@ -201,6 +203,8 @@
     seriesCategory = guessCategory(g.items)
     seriesStatus = 'wishlist'
     seriesCovers = {}
+    excludedVolumes = new Set()
+    collectorVolumes = new Set()
     const volumes = g.items.map((r) => parseSeriesVolume(r.title).volume).filter((v): v is number => v !== null)
     seriesFrom = 1
     seriesTo = volumes.length ? Math.max(...volumes) : g.items.length
@@ -261,13 +265,14 @@
     if (seriesView && seriesVolumeList.length) loadMissingCoversBatched(seriesView, seriesVolumeList)
   })
 
-  /** Tome resté sans couverture (ni résultat trouvé, ni MangaDex) : recherche ciblée sur ce tome
-   * précis, réutilise le même moteur que le sélecteur de couverture de la fiche livre. */
+  /** Cliquer sur la vignette permet de remplacer la couverture manuellement à tout moment (pas
+   * seulement si elle manque) — utile pour une édition collector qui n'a pas la même couverture. */
   async function pickVolumeCover(n: number) {
     if (!seriesView) return
     volumePicker = n
     volumePickerLoading = true
-    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}`)
+    const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
+    volumePickerCandidates = await searchCoverCandidates(`${seriesView.series} Tome ${n}${suffix}`)
     volumePickerLoading = false
   }
 
@@ -277,14 +282,32 @@
     volumePicker = null
   }
 
+  function toggleVolumeIncluded(n: number) {
+    const s = new Set(excludedVolumes)
+    if (s.has(n)) s.delete(n)
+    else s.add(n)
+    excludedVolumes = s
+  }
+
+  function toggleVolumeCollector(n: number) {
+    const s = new Set(collectorVolumes)
+    if (s.has(n)) s.delete(n)
+    else s.add(n)
+    collectorVolumes = s
+  }
+
+  // Nombre de tomes réellement ajoutés : la plage moins ce que l'utilisateur a décoché (déjà possédé,
+  // édition différente, etc.) — la plage seule ne dit plus combien de livres seront créés.
+  const includedVolumeCount = $derived(seriesVolumeList.filter((n) => !excludedVolumes.has(n)).length)
+
   async function addSeriesRange() {
     if (adding || !seriesView) return
-    const from = Math.max(1, Math.min(seriesFrom, seriesTo))
-    const to = Math.min(from + 199, Math.max(seriesFrom, seriesTo))
     adding = true
     const { data: userData } = await supabase.auth.getUser()
-    for (let n = from; n <= to; n++) {
+    for (const n of seriesVolumeList) {
+      if (excludedVolumes.has(n)) continue
       const match = foundVolume(seriesView, n)
+      const isCollector = collectorVolumes.has(n)
       const base: BookLookupResult = match ?? {
         isbn: null,
         title: `${seriesView.series} Tome ${n}`,
@@ -293,7 +316,8 @@
         cover_url: seriesCovers[n] ?? null,
         pages: null,
       }
-      await insertBook(base, userData.user?.id, seriesCategory, seriesStatus, seriesView.series)
+      const toInsert = isCollector ? { ...base, title: `${base.title} (Édition collector)` } : base
+      await insertBook(toInsert, userData.user?.id, seriesCategory, seriesStatus, seriesView.series)
     }
     adding = false
     seriesView = null
@@ -480,20 +504,28 @@
         {/each}
       </div>
       {#if seriesCoversLoading}<p class="text-xs text-slate-400">Récupération des couvertures MangaDex…</p>{/if}
+      <p class="text-xs text-slate-400 leading-relaxed -mt-2">
+        Décoche les tomes que tu ne veux pas ajouter (déjà possédés, pas encore acquis…). Marque
+        <span class="text-amber-500 font-semibold">★</span> une édition collector — clique sur la couverture pour la remplacer.
+      </p>
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
         {#each seriesVolumeList as n (n)}
           {@const match = foundVolume(seriesView, n)}
           {@const cover = match?.cover_url ?? seriesCovers[n]}
           {@const searching = isSearchingVolume[n]}
-          <div class="flex flex-col items-center gap-1.5">
+          {@const excluded = excludedVolumes.has(n)}
+          {@const collector = collectorVolumes.has(n)}
+          <div class="flex flex-col items-center gap-1.5" class:opacity-40={excluded}>
             <div
-              class="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-light-card dark:bg-app-card border border-light-border dark:border-app-border"
-              class:cursor-pointer={!cover}
+              class="relative w-full aspect-[2/3] rounded-lg overflow-hidden cursor-pointer bg-light-card dark:bg-app-card border-2"
+              class:border-amber-400={collector}
+              class:border-light-border={!collector}
+              class:dark:border-app-border={!collector}
               class:animate-pulse={searching && !cover}
               role="button"
               tabindex="0"
-              onclick={() => !cover && pickVolumeCover(n)}
-              onkeydown={(e) => e.key === 'Enter' && !cover && pickVolumeCover(n)}
+              onclick={() => pickVolumeCover(n)}
+              onkeydown={(e) => e.key === 'Enter' && pickVolumeCover(n)}
             >
               {#if cover}
                 <img src={cover} alt="Tome {n}" class="w-full h-full object-cover" />
@@ -507,6 +539,32 @@
               {:else}
                 {@render coverFallback(`T${n}`)}
               {/if}
+              <button
+                type="button"
+                class="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold border border-white/70"
+                class:bg-indigo-600={!excluded}
+                class:text-white={!excluded}
+                class:bg-white={excluded}
+                class:text-slate-400={excluded}
+                onclick={(e) => {
+                  e.stopPropagation()
+                  toggleVolumeIncluded(n)
+                }}
+                title={excluded ? 'Inclure ce tome' : 'Exclure ce tome'}
+              >
+                {excluded ? '' : '✓'}
+              </button>
+              <button
+                type="button"
+                class="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[11px] border border-white/70 {collector ? 'bg-amber-400 text-white' : 'bg-black/40 text-white/70'}"
+                onclick={(e) => {
+                  e.stopPropagation()
+                  toggleVolumeCollector(n)
+                }}
+                title={collector ? 'Édition collector (cliquer pour retirer)' : 'Marquer édition collector'}
+              >
+                ★
+              </button>
             </div>
             <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">T{n}</div>
           </div>
@@ -515,9 +573,9 @@
       <button
         class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50"
         onclick={addSeriesRange}
-        disabled={adding || seriesTo < seriesFrom}
+        disabled={adding || includedVolumeCount === 0}
       >
-        Ajouter les tomes {Math.min(seriesFrom, seriesTo)} à {Math.max(seriesFrom, seriesTo)}
+        Ajouter {includedVolumeCount} tome{includedVolumeCount > 1 ? 's' : ''}
       </button>
     {:else}
       <div class="relative">
