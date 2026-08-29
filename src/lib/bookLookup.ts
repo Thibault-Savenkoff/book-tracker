@@ -277,6 +277,20 @@ type AniListMedia = {
   volumes?: number | null
 }
 
+const normalizeTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/** Une recherche floue ("My Hero Academia") remonte souvent des spin-offs/doujinshi avant la
+ * série principale (ex: AniList renvoie "School Briefs" en position 0, MangaDex un doujinshi) —
+ * on préfère donc le résultat dont le titre correspond exactement, sinon le plus proche. */
+function pickBestTitleMatch<T>(seriesTitle: string, entries: T[], getTitles: (e: T) => (string | undefined)[]): T | undefined {
+  const target = normalizeTitle(seriesTitle)
+  if (!entries.length) return undefined
+  const exact = entries.find((e) => getTitles(e).some((t) => t && normalizeTitle(t) === target))
+  if (exact) return exact
+  const contains = entries.find((e) => getTitles(e).some((t) => t && normalizeTitle(t).includes(target)))
+  return contains ?? entries[0]
+}
+
 /** AniList connaît le nombre officiel de tomes d'une série (ex: 42 pour My Hero Academia) —
  * sert à pré-remplir "Au tome" plutôt que de deviner depuis les quelques résultats Google Books. */
 export async function getSeriesVolumeCount(seriesTitle: string): Promise<number | null> {
@@ -287,7 +301,8 @@ export async function getSeriesVolumeCount(seriesTitle: string): Promise<number 
       body: JSON.stringify({ query: ANILIST_QUERY, variables: { search: seriesTitle } }),
     })
     const media: AniListMedia[] = data?.data?.Page?.media ?? []
-    return media[0]?.volumes ?? null
+    const best = pickBestTitleMatch(seriesTitle, media, (m) => [m.title?.romaji, m.title?.english])
+    return best?.volumes ?? null
   } catch {
     return null
   }
@@ -301,8 +316,13 @@ export type MangaDexCoverMap = Record<number, string>
  * (renvoie {}) : c'est un complément, pas une dépendance bloquante pour l'écran de série. */
 export async function fetchMangaDexCovers(seriesTitle: string): Promise<MangaDexCoverMap> {
   try {
-    const search = await fetchJson(`https://api.mangadex.org/manga?title=${encodeURIComponent(seriesTitle)}&limit=1`)
-    const mangaId = search?.data?.[0]?.id
+    const search = await fetchJson(`https://api.mangadex.org/manga?title=${encodeURIComponent(seriesTitle)}&limit=10`)
+    const candidates: { id: string; attributes: { title: Record<string, string>; altTitles?: Record<string, string>[] } }[] = search?.data ?? []
+    const best = pickBestTitleMatch(seriesTitle, candidates, (c) => [
+      ...Object.values(c.attributes?.title ?? {}),
+      ...(c.attributes?.altTitles ?? []).flatMap((t) => Object.values(t)),
+    ])
+    const mangaId = best?.id
     if (!mangaId) return {}
     const covers = await fetchJson(`https://api.mangadex.org/cover?manga[]=${mangaId}&limit=100`)
     const map: MangaDexCoverMap = {}
