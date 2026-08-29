@@ -184,7 +184,10 @@
     }
     return [...map.values()].map((group) => ({
       series: parseSeriesVolume(group[0].title).series,
-      items: [...group].sort((a, b) => (parseSeriesVolume(a.title).volume ?? 0) - (parseSeriesVolume(b.title).volume ?? 0)),
+      // Les titres sans numéro détecté (volume: null) doivent passer après les vrais tomes, pas
+      // avant : sinon un résultat générique (parfois mal indexé par la source, couverture erronée)
+      // se retrouve en position 0 et sert de vignette du groupe à la place du vrai tome 1.
+      items: [...group].sort((a, b) => (parseSeriesVolume(a.title).volume ?? Infinity) - (parseSeriesVolume(b.title).volume ?? Infinity)),
     }))
   }
 
