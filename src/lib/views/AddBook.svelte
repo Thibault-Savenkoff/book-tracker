@@ -50,6 +50,7 @@
   let volumePickerCandidates = $state<string[]>([])
   let volumePickerLoading = $state(false)
   let volumePickerQuery = $state('')
+  let volumePickerUrlInput = $state('')
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
@@ -284,6 +285,7 @@
   async function pickVolumeCover(n: number) {
     if (!seriesView) return
     volumePicker = n
+    volumePickerUrlInput = ''
     volumePickerCandidates = seriesCovers[n] ?? []
     const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
     volumePickerQuery = `${seriesView.series} Tome ${n}${suffix}`
@@ -836,6 +838,23 @@
         />
         <button type="submit" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex-shrink-0" disabled={volumePickerLoading}>
           Chercher
+        </button>
+      </form>
+      <form
+        class="flex gap-2"
+        onsubmit={(e) => {
+          e.preventDefault()
+          if (volumePickerUrlInput.trim()) applyVolumeCover(volumePickerUrlInput.trim())
+        }}
+      >
+        <input
+          type="url"
+          bind:value={volumePickerUrlInput}
+          placeholder="Ou colle l'URL d'une image (édition collector…)"
+          class="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white"
+        />
+        <button type="submit" class="px-3 py-2 rounded-lg border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-xs font-semibold flex-shrink-0" disabled={!volumePickerUrlInput.trim()}>
+          Utiliser
         </button>
       </form>
       {#if volumePickerLoading}
