@@ -2,7 +2,8 @@
 
 ## Pipeline
 
-- No CI. Vercel is connected to the GitHub repo and builds on push to `main` with the Vite preset (`npm run build` to `dist/`). Nothing runs the typecheck before a deploy.
+- GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` then `npm run build` on every push to `main` and on pull requests. It is a signal, not a gate: Vercel deploys in parallel and does not wait for it.
+- Vercel is connected to the GitHub repo and builds on push to `main` with the Vite preset (`npm run build` to `dist/`).
 - The Supabase side is deployed by hand: migrations pasted into the SQL editor, the edge function pushed with the Supabase CLI.
 
 ## Environments

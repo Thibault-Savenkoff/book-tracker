@@ -13,4 +13,6 @@
 | 1 | `npm run check` | typecheck |
 | 2 | `npm run build` | production Vite + PWA build |
 
-There is no linter, no formatter, and no test runner wired up. `npm run check` is the only automated gate that exists.
+CI (`.github/workflows/ci.yml`) runs both on push to `main` and on pull requests.
+
+There is no linter, no formatter, and no test runner wired up.
