@@ -1,4 +1,5 @@
 import { supabase } from './supabase.ts'
+import { stripEditionQualifiers } from './searchQuery.ts'
 
 export type BookSource = 'Google Books' | 'OpenLibrary' | 'AniList' | 'Comic Vine'
 
@@ -277,10 +278,13 @@ export async function searchCoverCandidates(query: string, isbn?: string | null,
 
   const hint = titleHint ?? query
   const strict = await coversFor(query, hint)
-  const bareQuery = query.replace(/[-–:]?\s*(tome|vol\.?|volume)\s*\d+/i, '').trim()
   let all = strict
-  if (new Set(strict).size < 4 && bareQuery && bareQuery !== query) {
-    all = [...strict, ...(await coversFor(bareQuery, hint))]
+  // Deux replis successifs, du plus précis au plus large : sans le qualificatif d'édition,
+  // puis sans le numéro de tome.
+  for (const fallback of [stripEditionQualifiers(query), stripEditionQualifiers(query).replace(/[-–:]?\s*(tome|vol\.?|volume|t)\s*\d+/i, '').trim()]) {
+    if (new Set(all).size >= 4) break
+    if (!fallback || fallback === query) continue
+    all = [...all, ...(await coversFor(fallback, hint))]
   }
   return [...new Set(all)].slice(0, 16)
 }
