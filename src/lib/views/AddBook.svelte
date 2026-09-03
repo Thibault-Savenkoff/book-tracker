@@ -22,7 +22,9 @@
   const ADD_STATUSES: Status[] = ['wishlist', 'reading', 'read']
 
   let { initialQuery }: { initialQuery?: string } = $props()
-  const seedQuery = initialQuery
+  // untrack : la requête initiale ne sert qu'à amorcer le champ au montage. La rendre réactive
+  // écraserait ce que l'utilisateur est en train de taper.
+  const seedQuery = untrack(() => initialQuery)
 
   let query = $state(seedQuery ?? '')
   let searchInputEl = $state<HTMLInputElement | null>(null)
