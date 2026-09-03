@@ -8,15 +8,17 @@
     expandAlias,
     fetchMangaDexCovers,
     getSeriesVolumeCount,
-    searchCoverCandidates,
     LookupNetworkError,
     type BookLookupResult,
     type SearchLatencies,
   } from '../bookLookup'
-  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
+  import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL, chipClass } from '../bookStyle'
+  import CoverFallback from './CoverFallback.svelte'
+  import BookPreviewModal from './BookPreviewModal.svelte'
+  import VolumeCoverPicker from './VolumeCoverPicker.svelte'
   import { parseSeriesVolume } from '../series'
   import { createBarcodeScanner } from '../scanner'
-  import { guessCategory, looksLikeIsbn, groupBySeries, resultKey, foundVolume, volumeRange, bookRow, type SeriesGroup } from '../addBook'
+  import { guessCategory, looksLikeIsbn, groupBySeries, foundVolume, volumeRange, bookRow } from '../addBook'
 
   type Category = keyof typeof CATEGORY_LABEL
   type Status = keyof typeof STATUS_LABEL
@@ -38,8 +40,6 @@
   let isbnNotFound = $state(false)
   let ownedMatch = $state<{ id: string; title: string; status: Status } | null>(null)
   let previewItem = $state<BookLookupResult | null>(null)
-  let previewCategory = $state<Category>('roman')
-  let previewStatus = $state<Status>('wishlist')
   let seriesView = $state<{ series: string; items: BookLookupResult[] } | null>(null)
   let seriesCategory = $state<Category>('manga')
   let seriesStatus = $state<Status>('wishlist')
@@ -52,12 +52,6 @@
   let collectorVolumes = $state<Set<number>>(new Set())
   let volumeIsbnOverride = $state<Record<number, BookLookupResult>>({})
   let volumePicker = $state<number | null>(null)
-  let volumePickerCandidates = $state<string[]>([])
-  let volumePickerLoading = $state(false)
-  let volumePickerQuery = $state('')
-  let volumePickerUrlInput = $state('')
-  let volumePickerScanning = $state(false)
-  const volumeScanner = createBarcodeScanner()
   const mainScanner = createBarcodeScanner()
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
@@ -134,8 +128,6 @@
 
   function openPreview(r: BookLookupResult) {
     previewItem = r
-    previewCategory = guessCategory([r])
-    previewStatus = 'wishlist'
   }
 
   function addManual() {
@@ -222,60 +214,24 @@
    * Les alternatives MangaDex déjà récupérées (fr/ja) sont de vraies jaquettes de CE tome — on les
    * propose d'abord, Google Books ne sert qu'à compléter (il ne connaît souvent que l'édition
    * standard, jamais une collector, et ses résultats sans rapport ont déjà fait plus de mal que de bien). */
-  async function pickVolumeCover(n: number) {
-    if (!seriesView) return
+  function pickVolumeCover(n: number) {
     volumePicker = n
-    volumePickerUrlInput = ''
-    volumePickerCandidates = seriesCovers[n] ?? []
-    const suffix = collectorVolumes.has(n) ? ' édition collector' : ''
-    volumePickerQuery = `${seriesView.series} Tome ${n}${suffix}`
-    await runVolumePickerSearch()
-  }
-
-  async function runVolumePickerSearch() {
-    if (!seriesView || volumePicker === null || !volumePickerQuery.trim()) return
-    volumePickerLoading = true
-    const extra = await searchCoverCandidates(volumePickerQuery, null, seriesView.series)
-    volumePickerCandidates = [...new Set([...(seriesCovers[volumePicker] ?? []), ...extra])]
-    volumePickerLoading = false
   }
 
   function applyVolumeCover(url: string) {
     if (volumePicker === null) return
     seriesCovers = { ...seriesCovers, [volumePicker]: [url] }
-    closeVolumePicker()
-  }
-
-  function stopVolumeScanner() {
-    volumeScanner.stop()
-    volumePickerScanning = false
-  }
-
-  function closeVolumePicker() {
-    stopVolumeScanner()
     volumePicker = null
   }
 
-  async function openVolumeScanner() {
-    if (volumePicker === null) return
-    volumePickerScanning = true
-    const started = await volumeScanner.start('volume-scanner', applyVolumeScan)
-    if (!started) volumePickerScanning = false
-  }
-
-  /** Le code-barre identifie l'édition exacte que l'utilisateur a en main (ISBN propre à chaque
-   * édition, collector incluse) — pas d'ambiguïté possible, contrairement à une recherche par
-   * mots-clés : on applique directement, sans passer par une liste de candidats à trier. */
-  async function applyVolumeScan(isbn: string) {
+  /** Un scan remplace l'édition entière du tome, pas seulement sa couverture : l'ISBN scanné
+   * identifie l'exemplaire que l'utilisateur a en main. */
+  function applyVolumeScan(result: BookLookupResult) {
     if (volumePicker === null) return
     const n = volumePicker
-    const result = await lookupByIsbn(isbn)
-    stopVolumeScanner()
-    if (result) {
-      volumeIsbnOverride = { ...volumeIsbnOverride, [n]: result }
-      if (result.cover_url) seriesCovers = { ...seriesCovers, [n]: [result.cover_url, ...(seriesCovers[n] ?? [])] }
-      volumePicker = null
-    }
+    volumeIsbnOverride = { ...volumeIsbnOverride, [n]: result }
+    if (result.cover_url) seriesCovers = { ...seriesCovers, [n]: [result.cover_url, ...(seriesCovers[n] ?? [])] }
+    volumePicker = null
   }
 
   function toggleVolumeIncluded(n: number) {
@@ -368,12 +324,6 @@
 
   if (seedQuery) runSearch()
 
-  function chipClass(active: boolean) {
-    return active
-      ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
-      : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5'
-  }
-
   const SOURCE_PILLS: { key: keyof SearchLatencies; label: string }[] = [
     { key: 'google', label: 'Google Books' },
     { key: 'anilist', label: 'AniList API' },
@@ -387,7 +337,7 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return
-    if (volumePicker !== null) closeVolumePicker()
+    if (volumePicker !== null) volumePicker = null
     else if (previewItem) previewItem = null
     else if (seriesView) seriesView = null
     else if (scannerOpen) stopScanner()
@@ -396,21 +346,6 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-{#snippet coverFallback(title: string)}
-  <div class="w-full h-full bg-app-card dark:bg-app-card border border-light-border dark:border-app-border flex flex-col items-center justify-center gap-1.5 p-2">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" class="text-slate-500 flex-shrink-0"
-      ><path
-        d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V4a2 2 0 00-2-2H6.5A2.5 2.5 0 004 4.5v15z"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      /></svg
-    >
-    <span class="font-serif text-[10px] font-semibold text-slate-200 text-center px-1 line-clamp-2">{title}</span>
-  </div>
-{/snippet}
 
 <div class="p-4 md:p-8 flex justify-center">
   <div
@@ -530,7 +465,7 @@
                   </svg>
                 </div>
               {:else}
-                {@render coverFallback(`T${n}`)}
+                <CoverFallback title={`T${n}`} />
               {/if}
               <button
                 type="button"
@@ -658,7 +593,7 @@
               onkeydown={(e) => e.key === 'Enter' && openSeries(g)}
             >
               <div class="w-12 aspect-[2/3] rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
-                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} class="w-full h-full object-cover" />{:else}{@render coverFallback(g.series)}{/if}
+                {#if g.items[0].cover_url}<img src={g.items[0].cover_url} alt={g.series} class="w-full h-full object-cover" />{:else}<CoverFallback title={g.series} />{/if}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
@@ -682,7 +617,7 @@
               onkeydown={(e) => e.key === 'Enter' && openPreview(r)}
             >
               <div class="w-12 aspect-[2/3] rounded-md overflow-hidden bg-light-card dark:bg-app-card flex-shrink-0">
-                {#if r.cover_url}<img src={r.cover_url} alt={r.title} class="w-full h-full object-cover" />{:else}{@render coverFallback(r.title)}{/if}
+                {#if r.cover_url}<img src={r.cover_url} alt={r.title} class="w-full h-full object-cover" />{:else}<CoverFallback title={r.title} />{/if}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
@@ -717,148 +652,27 @@
 </div>
 
 {#if previewItem}
-  <div class="fixed inset-0 z-40 bg-black/50 flex items-end sm:items-center justify-center" role="presentation" onclick={() => (previewItem = null)}>
-    <div
-      class="relative w-full sm:max-w-md max-h-[88vh] overflow-y-auto thin-scrollbar p-6 pt-8 rounded-t-3xl sm:rounded-2xl flex flex-col gap-3 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && (previewItem = null)}
-    >
-      <button
-        class="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border text-slate-500 dark:text-slate-300"
-        onclick={() => (previewItem = null)}
-        aria-label="Fermer"
-      >
-        ✕
-      </button>
-      <div class="w-24 h-36 rounded-xl overflow-hidden bg-light-card dark:bg-app-card mx-auto mb-1 cover-shadow">
-        {#if previewItem.cover_url}<img src={previewItem.cover_url} alt={previewItem.title} class="w-full h-full object-cover" />{:else}{@render coverFallback(previewItem.title)}{/if}
-      </div>
-      <div class="font-serif text-xl font-bold text-slate-900 dark:text-white text-center">{previewItem.title}</div>
-      {#if previewItem.subtitle}<div class="text-sm text-slate-500 dark:text-slate-400 text-center -mt-1.5">{previewItem.subtitle}</div>{/if}
-      {#if previewItem.authors.length}<div class="text-sm text-slate-500 dark:text-slate-400 text-center">{previewItem.authors.join(', ')}</div>{/if}
-      <div class="flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
-        {#if previewItem.publisher}<span>{previewItem.publisher}</span>{/if}
-        {#if previewItem.publishedDate}<span>{previewItem.publishedDate}</span>{/if}
-        {#if previewItem.language}<span>{previewItem.language.toUpperCase()}</span>{/if}
-        {#if previewItem.pages}<span>{previewItem.pages} p.</span>{/if}
-        {#if previewItem.isbn}<span>ISBN {previewItem.isbn}</span>{/if}
-      </div>
-      {#if previewItem.categories?.length}
-        <div class="flex flex-wrap justify-center gap-1.5">
-          {#each previewItem.categories as c (c)}<span class="px-2.5 py-1 rounded-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border text-[11px] text-slate-500 dark:text-slate-400">{c}</span>{/each}
-        </div>
-      {/if}
-      {#if previewItem.description}<p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400 max-h-48 overflow-y-auto thin-scrollbar">{previewItem.description}</p>{/if}
-      <div class="flex flex-wrap gap-2 justify-center">
-        {#each Object.keys(CATEGORY_LABEL) as c (c)}
-          <button type="button" class={chipClass(previewCategory === c)} onclick={() => (previewCategory = c as Category)}>{CATEGORY_LABEL[c]}</button>
-        {/each}
-      </div>
-      <div class="flex flex-wrap gap-2 justify-center">
-        {#each ADD_STATUSES as s (s)}
-          <button type="button" class={chipClass(previewStatus === s)} onclick={() => (previewStatus = s as Status)}>{STATUS_LABEL[s]}</button>
-        {/each}
-      </div>
-      <button
-        class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50"
-        onclick={() => {
-          const pv = parseSeriesVolume(previewItem!.title)
-          addBook(previewItem as BookLookupResult, previewCategory, previewStatus, pv.volume ? pv.series : null)
-          previewItem = null
-        }}
-        disabled={adding}
-      >
-        Ajouter à ma bibliothèque
-      </button>
-    </div>
-  </div>
+  <BookPreviewModal
+    item={previewItem}
+    {adding}
+    onclose={() => (previewItem = null)}
+    onadd={(item, category, status, series) => {
+      addBook(item, category, status, series)
+      previewItem = null
+    }}
+  />
 {/if}
 
-{#if volumePicker !== null}
-  <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" role="presentation" onclick={closeVolumePicker}>
-    <div
-      class="w-full sm:max-w-md max-h-[78vh] flex flex-col rounded-t-2xl sm:rounded-2xl p-4 gap-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && closeVolumePicker()}
-    >
-      <div class="flex items-center justify-between font-serif font-bold text-base text-slate-900 dark:text-white">
-        <span>Couverture — Tome {volumePicker}</span>
-        <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={closeVolumePicker} aria-label="Fermer">✕</button>
-      </div>
-      {#if volumePickerScanning}
-        <div class="relative w-full aspect-square rounded-2xl bg-black overflow-hidden border border-light-border dark:border-app-border">
-          <div id="volume-scanner" class="w-full h-full"></div>
-        </div>
-        <button class="w-full py-2.5 rounded-xl border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-sm font-medium" onclick={stopVolumeScanner}>
-          Annuler le scan
-        </button>
-      {:else}
-        <button
-          class="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-app-card border border-light-border dark:border-app-border text-white dark:text-slate-100 text-sm font-semibold flex items-center justify-center gap-2"
-          onclick={openVolumeScanner}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            ><path d="M4 7V5a1 1 0 011-1h2M4 17v2a1 1 0 001 1h2M20 7V5a1 1 0 00-1-1h-2M20 17v2a1 1 0 01-1 1h-2M7 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg
-          >
-          Scanner le code-barre de ton exemplaire
-        </button>
-        <p class="text-[11px] text-slate-400 text-center -mt-2">Identifie l'édition exacte que tu as en main — plus fiable qu'une recherche par mots-clés.</p>
-      {/if}
-      <form
-        class="flex gap-2"
-        onsubmit={(e) => {
-          e.preventDefault()
-          runVolumePickerSearch()
-        }}
-      >
-        <input
-          type="text"
-          bind:value={volumePickerQuery}
-          placeholder="Éditeur, coffret, deluxe…"
-          class="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white"
-        />
-        <button type="submit" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex-shrink-0" disabled={volumePickerLoading}>
-          Chercher
-        </button>
-      </form>
-      <form
-        class="flex gap-2"
-        onsubmit={(e) => {
-          e.preventDefault()
-          if (volumePickerUrlInput.trim()) applyVolumeCover(volumePickerUrlInput.trim())
-        }}
-      >
-        <input
-          type="url"
-          bind:value={volumePickerUrlInput}
-          placeholder="Ou colle l'URL d'une image (édition collector…)"
-          class="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white"
-        />
-        <button type="submit" class="px-3 py-2 rounded-lg border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-xs font-semibold flex-shrink-0" disabled={!volumePickerUrlInput.trim()}>
-          Utiliser
-        </button>
-      </form>
-      {#if volumePickerLoading}
-        <p class="text-center text-sm text-slate-400 py-5">Recherche…</p>
-      {:else if volumePickerCandidates.length === 0}
-        <p class="text-center text-sm text-slate-400 py-5">Aucune couverture trouvée pour ce tome.</p>
-      {:else}
-        <div class="grid grid-cols-3 gap-2.5 overflow-y-auto thin-scrollbar">
-          {#each volumePickerCandidates as url (url)}
-            <button class="aspect-[2/3] rounded-lg overflow-hidden border-2 border-transparent bg-light-card dark:bg-app-card" onclick={() => applyVolumeCover(url)}>
-              <img src={url} alt="Option de couverture" loading="lazy" class="w-full h-full object-cover" />
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </div>
+{#if volumePicker !== null && seriesView}
+  <VolumeCoverPicker
+    seriesTitle={seriesView.series}
+    volume={volumePicker}
+    isCollector={collectorVolumes.has(volumePicker)}
+    knownCovers={seriesCovers[volumePicker] ?? []}
+    onclose={() => (volumePicker = null)}
+    onpick={applyVolumeCover}
+    onscanned={applyVolumeScan}
+  />
 {/if}
 
 <style>

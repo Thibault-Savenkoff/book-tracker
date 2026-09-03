@@ -60,3 +60,11 @@ export const STATUS_LABEL: Record<string, string> = {
   read: 'Terminé',
   abandoned: 'Abandonné',
 }
+
+/** Chip de sélection (catégorie, statut) : même style partout où on choisit une valeur
+ * parmi quelques-unes. */
+export function chipClass(active: boolean): string {
+  return active
+    ? 'px-3 py-1.5 rounded-lg text-xs font-mono font-medium bg-indigo-600 text-white'
+    : 'px-3 py-1.5 rounded-lg text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/5'
+}
