@@ -19,6 +19,6 @@ erDiagram
 ## Conventions
 
 - Migrations are plain SQL in `supabase/migrations/`, named `<timestamp>_<slug>.sql`, applied through the Supabase SQL editor. Every statement is written idempotently (`if not exists`, `drop constraint if exists`).
-- `supabase/schema.sql` is a snapshot for first-time setup and has drifted from the migrations. Read the migrations for the current shape; update the snapshot when you touch it.
+- `supabase/schema.sql` is a flattened snapshot for setting up a fresh project. It is not applied on top of an existing database — every schema change needs a migration file *and* the same change folded into the snapshot, or a new install breaks.
 - Enum-like columns are `text` with a `check` constraint, not Postgres enums — changing one means dropping and re-adding the constraint.
 - There is no seed data.
