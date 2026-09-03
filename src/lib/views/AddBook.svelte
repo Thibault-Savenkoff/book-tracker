@@ -60,6 +60,7 @@
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
+  let addSeriesError = $state<string | null>(null)
 
   // ponytail: éditeurs de manga francophones les plus courants — les tags "categories" de Google
   // Books (souvent juste "Juvenile Fiction" ou absents) ne suffisent pas à distinguer un manga.
@@ -146,23 +147,23 @@
     }
   }
 
+  function bookRow(result: BookLookupResult, userId: string | undefined, category: Category, status: Status, series: string | null = null) {
+    return {
+      user_id: userId,
+      isbn: result.isbn,
+      title: result.title || 'Sans titre',
+      authors: result.authors,
+      publisher: result.publisher,
+      cover_url: result.cover_url,
+      pages: result.pages,
+      category,
+      status,
+      series,
+    }
+  }
+
   function insertBook(result: BookLookupResult, userId: string | undefined, category: Category, status: Status, series: string | null = null) {
-    return supabase
-      .from('books')
-      .insert({
-        user_id: userId,
-        isbn: result.isbn,
-        title: result.title || 'Sans titre',
-        authors: result.authors,
-        publisher: result.publisher,
-        cover_url: result.cover_url,
-        pages: result.pages,
-        category,
-        status,
-        series,
-      })
-      .select()
-      .single()
+    return supabase.from('books').insert(bookRow(result, userId, category, status, series)).select().single()
   }
 
   async function addBook(result: BookLookupResult, category: Category = 'roman', status: Status = 'wishlist', series: string | null = null) {
@@ -388,30 +389,39 @@
   // édition différente, etc.) — la plage seule ne dit plus combien de livres seront créés.
   const includedVolumeCount = $derived(seriesVolumeList.filter((n) => !excludedVolumes.has(n)).length)
 
-  async function addSeriesRange() {
-    if (adding || !seriesView) return
-    adding = true
-    const { data: userData } = await supabase.auth.getUser()
-    for (const n of seriesVolumeList) {
-      if (excludedVolumes.has(n)) continue
-      // Un scan de code-barre (volumeIsbnOverride) identifie l'édition exacte possédée — il prime
-      // sur le résultat de recherche générique, qui peut être une autre édition du même tome.
-      const override = volumeIsbnOverride[n]
-      const match = foundVolume(seriesView, n)
-      const isCollector = collectorVolumes.has(n)
-      const base: BookLookupResult = override ?? match ?? {
+  /** Construit la ligne d'un tome : l'override de scan prime sur le résultat de recherche
+   * générique (qui peut être une autre édition), et à défaut on fabrique un titre minimal. */
+  function seriesVolumeRow(view: { series: string; items: BookLookupResult[] }, n: number): BookLookupResult {
+    const base: BookLookupResult = volumeIsbnOverride[n] ??
+      foundVolume(view, n) ?? {
         isbn: null,
-        title: `${seriesView.series} Tome ${n}`,
-        authors: seriesView.items[0].authors,
-        publisher: seriesView.items[0].publisher,
+        title: `${view.series} Tome ${n}`,
+        authors: view.items[0].authors,
+        publisher: view.items[0].publisher,
         cover_url: null,
         pages: null,
       }
-      const withCover = { ...base, cover_url: seriesCovers[n]?.[0] ?? base.cover_url }
-      const toInsert = isCollector ? { ...withCover, title: `${withCover.title} (Édition collector)` } : withCover
-      await insertBook(toInsert, userData.user?.id, seriesCategory, seriesStatus, seriesView.series)
-    }
+    const withCover = { ...base, cover_url: seriesCovers[n]?.[0] ?? base.cover_url }
+    return collectorVolumes.has(n) ? { ...withCover, title: `${withCover.title} (Édition collector)` } : withCover
+  }
+
+  async function addSeriesRange() {
+    if (adding || !seriesView) return
+    adding = true
+    addSeriesError = null
+    const view = seriesView
+    const { data: userData } = await supabase.auth.getUser()
+    // Un insert par tome, c'est un aller-retour réseau par tome (100 pour une longue série) et
+    // une série à moitié créée si l'un échoue. supabase-js accepte un tableau : une seule requête.
+    const rows = seriesVolumeList
+      .filter((n) => !excludedVolumes.has(n))
+      .map((n) => bookRow(seriesVolumeRow(view, n), userData.user?.id, seriesCategory, seriesStatus, view.series))
+    const { error } = await supabase.from('books').insert(rows)
     adding = false
+    if (error) {
+      addSeriesError = "Ajout impossible — aucun tome n'a été créé."
+      return
+    }
     seriesView = null
     currentView.set({ name: 'collection' })
   }
@@ -662,12 +672,15 @@
           </div>
         {/each}
       </div>
+      {#if addSeriesError}
+        <p class="text-xs text-red-500 text-center">{addSeriesError}</p>
+      {/if}
       <button
         class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50"
         onclick={addSeriesRange}
         disabled={adding || includedVolumeCount === 0}
       >
-        Ajouter {includedVolumeCount} tome{includedVolumeCount > 1 ? 's' : ''}
+        {adding ? 'Ajout…' : `Ajouter ${includedVolumeCount} tome${includedVolumeCount > 1 ? 's' : ''}`}
       </button>
     {:else}
       <div class="relative">

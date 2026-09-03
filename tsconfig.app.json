@@ -17,5 +17,8 @@
     "checkJs": true,
     "moduleDetection": "force"
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"],
+  // Les tests tournent sous Node (node:test, imports en .ts) : ils sont typés par
+  // tsconfig.node.json, qui a les types node et allowImportingTsExtensions.
+  "exclude": ["src/**/*.test.ts"]
 }

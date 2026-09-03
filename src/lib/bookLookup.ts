@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 export type BookSource = 'Google Books' | 'OpenLibrary' | 'AniList' | 'Comic Vine'
 
 export type BookLookupResult = {
@@ -425,10 +427,16 @@ type ComicVineIssue = {
 }
 
 /** Comic Vine bloque les appels directs depuis un navigateur (pas de CORS) — on passe par un
- * relais côté serveur (Supabase Edge Function) qui porte la clé API. */
+ * relais côté serveur (Supabase Edge Function) qui porte la clé API. Le relais exige un JWT
+ * (verify_jwt), donc on joint le token de la session courante. */
 async function searchComicVine(query: string): Promise<BookLookupResult[]> {
   const base = import.meta.env.VITE_SUPABASE_URL as string
-  const data = await fetchJson(`${base}/functions/v1/comicvine-search?q=${encodeURIComponent(query)}`)
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) return []
+  const data = await fetchJson(`${base}/functions/v1/comicvine-search?q=${encodeURIComponent(query)}`, 8000, {
+    headers: { Authorization: `Bearer ${token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string },
+  })
   const issues: ComicVineIssue[] = data?.results ?? []
   return issues
     .map((issue) => {

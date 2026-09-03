@@ -13,4 +13,5 @@
 
 ## Sessions
 
+- Signup is closed (`enable_signup = false` in `supabase/config.toml`); the account is created by flipping it on, then off again.
 - Handled entirely by `supabase-js` (storage, refresh, expiry). `onAuthStateChange` keeps the store in sync. Nothing about the session is managed by our code.

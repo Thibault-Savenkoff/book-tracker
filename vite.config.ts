@@ -29,6 +29,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // html5-qrcode pèse ~370 Ko et n'est chargé qu'à l'ouverture du scanner (import
+        // dynamique dans AddBook). Le précacher ferait télécharger plus de la moitié du
+        // payload d'installation pour une fonction que la plupart des sessions n'ouvrent pas.
+        globIgnores: ['**/esm-*.js'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/esm-.*\.js$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'scanner' },
+          },
+        ],
       },
     }),
   ],
