@@ -57,6 +57,9 @@
   let scanError = $state<string | null>(null)
   let adding = $state(false)
   let addSeriesError = $state<string | null>(null)
+  /** Tomes de cette série déjà en bibliothèque : décochés d'office et signalés, pour qu'un
+   * second passage sur la même série ne crée pas de doublons. */
+  let ownedVolumes = $state<Set<number>>(new Set())
 
   async function runSearch() {
     const q = query.trim()
@@ -148,6 +151,8 @@
     excludedVolumes = new Set()
     collectorVolumes = new Set()
     volumeIsbnOverride = {}
+    ownedVolumes = new Set()
+    loadOwnedVolumes(g.series)
     const volumes = g.items.map((r) => parseSeriesVolume(r.title).volume).filter((v): v is number => v !== null)
     seriesFrom = 1
     seriesTo = volumes.length ? Math.max(...volumes) : g.items.length
@@ -164,6 +169,23 @@
       seriesCoversLoading = false
       if (seriesView?.series === g.series) seriesCovers = covers
     }
+  }
+
+  /** Rien n'empêchait jusqu'ici d'ajouter deux fois la même série : on lit les tomes déjà
+   * possédés pour les décocher avant que l'utilisateur ne valide. Comparaison sur le nom de
+   * série normalisé, la casse et les espaces variant selon la source qui a servi à l'ajout. */
+  async function loadOwnedVolumes(series: string) {
+    const { data } = await supabase.from('books').select('title,series').not('series', 'is', null)
+    if (!data || seriesView?.series !== series) return
+    const key = series.trim().toLowerCase().replace(/\s+/g, ' ')
+    const owned = new Set<number>()
+    for (const b of data) {
+      if ((b.series ?? '').trim().toLowerCase().replace(/\s+/g, ' ') !== key) continue
+      const v = parseSeriesVolume(b.title).volume
+      if (v !== null) owned.add(v)
+    }
+    ownedVolumes = owned
+    excludedVolumes = new Set([...excludedVolumes, ...owned])
   }
 
   // $derived (pas un simple calcul dans le template) : se recalcule dès que fromVolume/toVolume
@@ -436,6 +458,11 @@
         Décoche les tomes que tu ne veux pas ajouter (déjà possédés, pas encore acquis…). Marque
         <span class="text-amber-500 font-semibold">★</span> une édition collector — clique sur la couverture pour la remplacer.
       </p>
+      {#if ownedVolumes.size}
+        <p class="text-xs text-indigo-500 dark:text-indigo-400 leading-relaxed -mt-3">
+          {ownedVolumes.size} tome{ownedVolumes.size > 1 ? 's' : ''} déjà dans ta bibliothèque, décoché{ownedVolumes.size > 1 ? 's' : ''} pour éviter les doublons.
+        </p>
+      {/if}
       <div class="grid grid-cols-4 sm:grid-cols-6 gap-3.5">
         {#each seriesVolumeList as n (n)}
           {@const match = foundVolume(seriesView, n)}
@@ -443,6 +470,7 @@
           {@const searching = isSearchingVolume[n]}
           {@const excluded = excludedVolumes.has(n)}
           {@const collector = collectorVolumes.has(n)}
+          {@const owned = ownedVolumes.has(n)}
           <div class="flex flex-col items-center gap-1.5" class:opacity-40={excluded}>
             <div
               class="relative w-full aspect-[2/3] rounded-lg overflow-hidden cursor-pointer bg-light-card dark:bg-app-card border-2"
@@ -466,6 +494,9 @@
                 </div>
               {:else}
                 <CoverFallback title={`T${n}`} />
+              {/if}
+              {#if owned}
+                <span class="absolute bottom-0 inset-x-0 py-0.5 text-[9px] font-mono text-center bg-indigo-600/90 text-white">POSSÉDÉ</span>
               {/if}
               <button
                 type="button"
