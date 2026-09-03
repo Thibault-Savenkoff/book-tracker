@@ -160,10 +160,12 @@ site_url = "https://macbook-air-de-anas.taildc31ca.ts.net"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+# Pas de joker ici : "https://*.vercel.app" laisserait Supabase rediriger un code d'auth
+# vers n'importe quelle app Vercel, qui pourrait alors l'échanger contre une session.
+# Ajouter l'URL de production exacte au moment du déploiement.
 additional_redirect_urls = [
   "http://localhost:5173",
   "https://macbook-air-de-anas.taildc31ca.ts.net",
-  "https://*.vercel.app",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

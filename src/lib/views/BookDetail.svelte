@@ -11,6 +11,7 @@
   let saving = $state(false)
   let deleting = $state(false)
   let deleteConfirmOpen = $state(false)
+  let actionError = $state<string | null>(null)
   let coverPickerOpen = $state(false)
   let coverLoading = $state(false)
   let coverCandidates = $state<string[]>([])
@@ -60,6 +61,7 @@
   async function save() {
     if (!book) return
     saving = true
+    actionError = null
     const date_read = book.status === 'read' ? (book.date_read ?? new Date().toISOString().slice(0, 10)) : book.date_read
     const payload = {
       title: book.title,
@@ -77,7 +79,12 @@
     }
     const { error } = await supabase.from('books').update(payload).eq('id', book.id)
     saving = false
-    if (error) return
+    // Sans message, l'échec est invisible : le volet reste ouvert avec les valeurs saisies
+    // et l'utilisateur croit avoir enregistré.
+    if (error) {
+      actionError = "Enregistrement impossible — vérifie ta connexion."
+      return
+    }
     const updated = { ...book, ...payload }
     booksStore.update((list) => list.map((b) => (b.id === updated.id ? updated : b)))
     close()
@@ -86,9 +93,14 @@
   async function remove() {
     if (!book) return
     deleting = true
+    actionError = null
     const { error } = await supabase.from('books').delete().eq('id', book.id)
     deleting = false
-    if (error) return
+    if (error) {
+      actionError = 'Suppression impossible — vérifie ta connexion.'
+      deleteConfirmOpen = false
+      return
+    }
     booksStore.update((list) => list.filter((b) => b.id !== book!.id))
     deleteConfirmOpen = false
     close()
@@ -295,6 +307,10 @@
           class="w-full bg-light-card dark:bg-app-card border border-light-border dark:border-app-border rounded-xl p-3 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
         ></textarea>
       </div>
+
+      {#if actionError}
+        <p class="text-xs text-red-500 text-center">{actionError}</p>
+      {/if}
 
       <div class="flex gap-2 pb-2">
         <button class="flex-1 py-2.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 text-xs font-semibold" onclick={() => (deleteConfirmOpen = true)}> Supprimer </button>

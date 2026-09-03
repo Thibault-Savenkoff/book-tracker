@@ -5,6 +5,7 @@
 
   let books = $state<Book[]>([])
   let loading = $state(true)
+  let loadError = $state(false)
   let editingGoal = $state(false)
   let goalInputEl = $state<HTMLInputElement | null>(null)
 
@@ -14,8 +15,11 @@
 
   async function load() {
     loading = true
-    const { data } = await supabase.from('books').select('*')
-    books = data ?? []
+    loadError = false
+    // Sans ça, une panne réseau affiche un bilan à zéro comme si l'année était vide.
+    const { data, error } = await supabase.from('books').select('*')
+    if (error) loadError = true
+    else books = data ?? []
     loading = false
   }
   load()
@@ -80,6 +84,11 @@
 
   {#if loading}
     <p class="text-center text-slate-400 py-16 text-sm">Chargement…</p>
+  {:else if loadError}
+    <div class="flex flex-col items-center gap-4 text-center py-16 text-slate-400">
+      <p>Impossible de charger ton bilan.</p>
+      <button class="px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold" onclick={load}>Réessayer</button>
+    </div>
   {:else}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div class="rounded-2xl p-4 bg-light-surface dark:bg-app-surface border border-light-border dark:border-app-border">

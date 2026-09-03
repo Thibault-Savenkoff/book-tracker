@@ -7,12 +7,17 @@
   import { searchQuery, filterCategory } from '../collectionFilter'
 
   let loading = $state(true)
+  let loadError = $state(false)
   const books = $derived($booksStore)
 
   async function load() {
     loading = true
-    const { data } = await supabase.from('books').select('*').order('date_added', { ascending: false })
-    booksStore.set(data ?? [])
+    loadError = false
+    // Sans distinguer l'erreur du résultat vide, une panne réseau s'affiche comme
+    // "Ta bibliothèque est vide" — le pire message possible dans ce cas.
+    const { data, error } = await supabase.from('books').select('*').order('date_added', { ascending: false })
+    if (error) loadError = true
+    else booksStore.set(data ?? [])
     loading = false
   }
   load()
@@ -207,6 +212,11 @@
 <div class="p-4 md:p-8 space-y-8">
   {#if loading}
     <p class="text-center text-slate-400 py-16 text-sm">Chargement…</p>
+  {:else if loadError}
+    <div class="flex flex-col items-center gap-4 text-center py-16 text-slate-400">
+      <p>Impossible de charger ta bibliothèque.</p>
+      <button class="px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold" onclick={load}>Réessayer</button>
+    </div>
   {:else if resultsActive}
     <div>
       <div class="flex items-center justify-between mb-4">

@@ -129,9 +129,11 @@
     isbnNotFound = false
     ownedMatch = null
     try {
-      const { data: owned } = await supabase.from('books').select('id,title,status').eq('isbn', isbn).maybeSingle()
-      if (owned) {
-        ownedMatch = owned
+      // limit(1) et pas maybeSingle() : posséder deux exemplaires d'un même ISBN est un cas
+      // prévu (édition collector), et maybeSingle() renvoie une erreur dès qu'il y a 2 lignes.
+      const { data: owned } = await supabase.from('books').select('id,title,status').eq('isbn', isbn).limit(1)
+      if (owned?.length) {
+        ownedMatch = owned[0]
         return
       }
       const result = await lookupByIsbn(isbn)
