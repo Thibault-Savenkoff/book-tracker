@@ -1,15 +1,19 @@
 <script lang="ts">
   import { supabase } from '../supabase'
   import { theme, toggleTheme } from '../theme'
+  import { authLinkError } from '../auth'
 
   let email = $state('')
   let password = $state('')
   let signingIn = $state(false)
-  let error = $state<string | null>(null)
+  // Une erreur de lien expiré est présente dès l'arrivée : elle sert d'état initial, puis toute
+  // action de l'utilisateur la remplace.
+  let error = $state<string | null>($authLinkError)
   let resetSent = $state(false)
 
   async function signIn() {
     error = null
+    authLinkError.set(null)
     signingIn = true
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
     signingIn = false
@@ -22,6 +26,7 @@
       return
     }
     error = null
+    authLinkError.set(null)
     const { error: err } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
     if (err) {
       error = err.message
