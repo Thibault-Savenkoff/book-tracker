@@ -8,7 +8,8 @@
 
 ## Tokens
 
-- Colours and fonts are defined in `tailwind.config.js` under `app.*` (dark), `light.*` (light) and `accent.*` (per category). Default Tailwind palette classes (`bg-gray-100`, `text-blue-500`) are forbidden.
+- Colours and fonts are defined in `tailwind.config.js` under `app.*` (dark), `light.*` (light) and `accent.*` (per category).
+- Beyond those tokens, only four Tailwind hues are sanctioned, one role each: `slate` (the sole neutral ramp), `indigo` (primary and interactive), `red` (destructive and errors), `emerald` (success), `amber` (warning). Every other hue is forbidden, with one documented exception (the avatar gradient in `TopNav.svelte`). `DESIGN_GUIDELINES.md` §1-2 is the rule.
 - Custom utilities (`cover-shadow`, `thin-scrollbar`) and the base font live in `src/app.css`.
 - The category colour, label and gradient maps used in TypeScript are in `src/lib/bookStyle.ts` — the same values as the Tailwind `accent` tokens, kept in sync by hand.
 

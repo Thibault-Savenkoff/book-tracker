@@ -15,6 +15,8 @@
   } from '../bookLookup'
   import { CATEGORY_LABEL, CATEGORY_BADGE_CLASS, STATUS_LABEL } from '../bookStyle'
   import { parseSeriesVolume } from '../series'
+  import { createBarcodeScanner } from '../scanner'
+  import { guessCategory, looksLikeIsbn, groupBySeries, resultKey, foundVolume, volumeRange, bookRow, type SeriesGroup } from '../addBook'
 
   type Category = keyof typeof CATEGORY_LABEL
   type Status = keyof typeof STATUS_LABEL
@@ -55,43 +57,12 @@
   let volumePickerQuery = $state('')
   let volumePickerUrlInput = $state('')
   let volumePickerScanning = $state(false)
-  let volumeHtml5QrCode: import('html5-qrcode').Html5Qrcode | null = null
-  let volumeScanDecoded = false
+  const volumeScanner = createBarcodeScanner()
+  const mainScanner = createBarcodeScanner()
   let scannerOpen = $state(false)
   let scanError = $state<string | null>(null)
   let adding = $state(false)
   let addSeriesError = $state<string | null>(null)
-
-  // ponytail: éditeurs de manga francophones les plus courants — les tags "categories" de Google
-  // Books (souvent juste "Juvenile Fiction" ou absents) ne suffisent pas à distinguer un manga.
-  const MANGA_PUBLISHERS = [
-    'kana', 'pika', 'kurokawa', 'ki-oon', 'tonkam', 'glénat manga', 'soleil manga',
-    'panini manga', 'ankama', 'akata', 'doki-doki', 'meian', 'mangetsu', 'komikku', 'kazé manga',
-  ]
-
-  /** Devine la catégorie à partir des tags Google Books, de l'éditeur, sinon d'un indice grossier
-   * (série avec plusieurs tomes -> manga, le cas le plus fréquent ici). Simple pré-remplissage,
-   * pas une vérité : l'utilisateur peut toujours corriger via les chips avant d'ajouter. */
-  function guessCategory(items: BookLookupResult[]): Category {
-    const text = items
-      .flatMap((i) => i.categories ?? [])
-      .join(' ')
-      .toLowerCase()
-    const publishers = items.map((i) => (i.publisher ?? '').toLowerCase())
-    if (text.includes('manga') || text.includes('shonen') || text.includes('shojo') || text.includes('seinen')) return 'manga'
-    if (publishers.some((p) => MANGA_PUBLISHERS.some((m) => p.includes(m)))) return 'manga'
-    if (text.includes('comic')) return 'comics'
-    if (text.includes('bande dessin') || text.includes('graphic novel')) return 'bd'
-    if (items.length > 1) return 'manga'
-    return 'roman'
-  }
-
-  /** Un seul champ pour tout chercher : si la saisie ressemble à un ISBN (10 ou 13 chiffres,
-   * tirets/espaces ignorés), on fait une recherche exacte par ISBN plutôt qu'une recherche texte. */
-  function looksLikeIsbn(q: string): boolean {
-    const cleaned = q.replace(/[-\s]/g, '')
-    return /^(97[89])?\d{9}[\dXx]$/.test(cleaned)
-  }
 
   async function runSearch() {
     const q = query.trim()
@@ -147,21 +118,6 @@
     }
   }
 
-  function bookRow(result: BookLookupResult, userId: string | undefined, category: Category, status: Status, series: string | null = null) {
-    return {
-      user_id: userId,
-      isbn: result.isbn,
-      title: result.title || 'Sans titre',
-      authors: result.authors,
-      publisher: result.publisher,
-      cover_url: result.cover_url,
-      pages: result.pages,
-      category,
-      status,
-      series,
-    }
-  }
-
   function insertBook(result: BookLookupResult, userId: string | undefined, category: Category, status: Status, series: string | null = null) {
     return supabase.from('books').insert(bookRow(result, userId, category, status, series)).select().single()
   }
@@ -186,27 +142,7 @@
     addBook({ isbn: null, title: '', authors: [], publisher: null, cover_url: null, pages: null })
   }
 
-  function groupBySeries(items: BookLookupResult[]): { series: string; items: BookLookupResult[] }[] {
-    const map = new Map<string, BookLookupResult[]>()
-    for (const r of items) {
-      const key = parseSeriesVolume(r.title).series.toLowerCase()
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(r)
-    }
-    return [...map.values()].map((group) => ({
-      series: parseSeriesVolume(group[0].title).series,
-      // Les titres sans numéro détecté (volume: null) doivent passer après les vrais tomes, pas
-      // avant : sinon un résultat générique (parfois mal indexé par la source, couverture erronée)
-      // se retrouve en position 0 et sert de vignette du groupe à la place du vrai tome 1.
-      items: [...group].sort((a, b) => (parseSeriesVolume(a.title).volume ?? Infinity) - (parseSeriesVolume(b.title).volume ?? Infinity)),
-    }))
-  }
-
   const groups = $derived(groupBySeries(results))
-
-  function resultKey(r: BookLookupResult) {
-    return r.isbn ?? r.title
-  }
 
   /** Google Books ne renvoie qu'un échantillon partiel et dans le désordre pour une recherche par
    * série (vérifié : 20 résultats sur 42 tomes réels, non consécutifs) — impossible de s'y fier pour
@@ -238,15 +174,9 @@
     }
   }
 
-  function foundVolume(g: { items: BookLookupResult[] }, n: number): BookLookupResult | null {
-    return g.items.find((r) => parseSeriesVolume(r.title).volume === n) ?? null
-  }
-
   // $derived (pas un simple calcul dans le template) : se recalcule dès que fromVolume/toVolume
   // changent, ce qui redéclenche l'effet de chargement des couvertures ci-dessous.
-  const seriesVolumeList = $derived(
-    seriesView ? Array.from({ length: Math.max(0, Math.min(seriesTo, seriesFrom + 299) - seriesFrom + 1) }, (_, i) => seriesFrom + i) : [],
-  )
+  const seriesVolumeList = $derived(seriesView ? volumeRange(seriesFrom, seriesTo) : [])
 
   /** Une recherche globale sur la série ne remonte qu'un échantillon partiel et désordonné
    * (vérifié : 20 résultats sur 42 tomes réels) — on cible donc explicitement "Tome N" pour
@@ -317,10 +247,7 @@
   }
 
   function stopVolumeScanner() {
-    if (volumeHtml5QrCode) {
-      volumeHtml5QrCode.stop().catch(() => {})
-      volumeHtml5QrCode = null
-    }
+    volumeScanner.stop()
     volumePickerScanning = false
   }
 
@@ -332,24 +259,8 @@
   async function openVolumeScanner() {
     if (volumePicker === null) return
     volumePickerScanning = true
-    volumeScanDecoded = false
-    const { Html5Qrcode } = await import('html5-qrcode')
-    volumeHtml5QrCode = new Html5Qrcode('volume-scanner')
-    try {
-      await volumeHtml5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 120 } },
-        (decodedText) => {
-          if (volumeScanDecoded) return
-          volumeScanDecoded = true
-          volumeHtml5QrCode?.pause(true)
-          applyVolumeScan(decodedText)
-        },
-        () => {},
-      )
-    } catch {
-      volumePickerScanning = false
-    }
+    const started = await volumeScanner.start('volume-scanner', applyVolumeScan)
+    if (!started) volumePickerScanning = false
   }
 
   /** Le code-barre identifie l'édition exacte que l'utilisateur a en main (ISBN propre à chaque
@@ -426,9 +337,7 @@
     currentView.set({ name: 'collection' })
   }
 
-  let html5QrCode: import('html5-qrcode').Html5Qrcode | null = null
   let scanState = $state<'idle' | 'scanning'>('idle')
-  let scanDecoded = false
 
   async function openScanner() {
     scanError = null
@@ -436,22 +345,8 @@
     ownedMatch = null
     scannerOpen = true
     scanState = 'scanning'
-    scanDecoded = false
-    const { Html5Qrcode } = await import('html5-qrcode')
-    html5QrCode = new Html5Qrcode('scanner')
-    try {
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 120 } },
-        (decodedText) => {
-          if (scanDecoded) return
-          scanDecoded = true
-          html5QrCode?.pause(true)
-          runIsbnLookup(decodedText)
-        },
-        () => {},
-      )
-    } catch {
+    const started = await mainScanner.start('scanner', runIsbnLookup)
+    if (!started) {
       scanError = "Impossible d'accéder à la caméra (HTTPS requis, vérifie les permissions)."
       scanState = 'idle'
     }
@@ -460,15 +355,11 @@
   function scanAgain() {
     isbnNotFound = false
     ownedMatch = null
-    scanDecoded = false
-    html5QrCode?.resume()
+    mainScanner.resume()
   }
 
   function stopScanner() {
-    if (html5QrCode) {
-      html5QrCode.stop().catch(() => {})
-      html5QrCode = null
-    }
+    mainScanner.stop()
     scannerOpen = false
     scanState = 'idle'
   }

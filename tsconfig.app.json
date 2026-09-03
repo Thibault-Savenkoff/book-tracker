@@ -6,6 +6,10 @@
     "module": "esnext",
     "types": ["svelte", "vite/client"],
     "allowArbitraryExtensions": true,
+    /* Les modules de src/lib/ sont importés à la fois par Vite (qui résout tout) et par le
+       runner de tests Node (qui exige l'extension explicite) : on autorise les imports en .ts
+       pour qu'un seul style d'import fonctionne des deux côtés. */
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     /**
      * Typecheck JS in `.svelte` and `.js` files by default.

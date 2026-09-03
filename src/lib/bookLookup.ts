@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.ts'
 
 export type BookSource = 'Google Books' | 'OpenLibrary' | 'AniList' | 'Comic Vine'
 

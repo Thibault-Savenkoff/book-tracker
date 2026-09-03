@@ -26,7 +26,10 @@ flowchart LR
 - Comic Vine is proxied through a Supabase edge function purely because it sends no CORS headers.
 - Device-local preferences (theme, reading goal) live in `localStorage`, not in Postgres — they are per-device, not per-library.
 
+- Logic worth testing is pulled out of the `.svelte` files into `src/lib/*.ts`. `addBook.ts` (category guessing, series grouping, row building) and `scanner.ts` (camera lifecycle, shared by the two places that scan) came out of `AddBook.svelte` for that reason.
+
 ## Gotchas
 
 - Svelte 5 runes only. `export let` and `$:` are forbidden (see `DESIGN_GUIDELINES.md`).
+- Modules under `src/lib/` are imported with an explicit `.ts` extension where a test reaches them: Vite resolves either form, Node's test runner requires the extension.
 - Barcode scanning needs HTTPS; it works on `localhost` in dev, and nowhere else without TLS.
