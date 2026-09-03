@@ -15,23 +15,22 @@
   let coverPickerOpen = $state(false)
   let coverLoading = $state(false)
   let coverCandidates = $state<string[]>([])
+  let coverUrlInput = $state('')
   let quotes = $state<Quote[]>([])
   let newQuoteText = $state('')
   let newQuotePage = $state('')
 
-  // ponytail: un seul résultat (le cas courant) = on l'applique direct, pas de modale à un choix.
-  // Plusieurs résultats = vraies jaquettes alternatives, on laisse choisir pour ne pas se tromper.
+  /** Le volet s'ouvre toujours, même sans résultat : les jaquettes alternatives et les éditions
+   * collector ne sont indexées par aucune de nos sources, donc coller une URL est souvent le seul
+   * moyen d'obtenir la bonne image. Auto-appliquer un résultat unique fermait cette porte. */
   async function openCoverPicker() {
     if (!book) return
-    coverLoading = true
-    const results = await searchCoverCandidates(`${book.title} ${book.authors.join(' ')}`, book.isbn, book.title)
-    coverLoading = false
-    if (results.length <= 1) {
-      if (results[0]) book.cover_url = results[0]
-      return
-    }
-    coverCandidates = results
+    coverUrlInput = ''
+    coverCandidates = []
     coverPickerOpen = true
+    coverLoading = true
+    coverCandidates = await searchCoverCandidates(`${book.title} ${book.authors.join(' ')}`, book.isbn, book.title)
+    coverLoading = false
   }
 
   function pickCover(url: string) {
@@ -341,6 +340,27 @@
         <span>Choisir une couverture</span>
         <button class="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white" onclick={() => (coverPickerOpen = false)} aria-label="Fermer">✕</button>
       </div>
+      <form
+        class="flex gap-2"
+        onsubmit={(e) => {
+          e.preventDefault()
+          if (coverUrlInput.trim()) pickCover(coverUrlInput.trim())
+        }}
+      >
+        <input
+          type="url"
+          bind:value={coverUrlInput}
+          placeholder="Colle l'URL d'une image (jaquette alternative…)"
+          class="flex-1 px-3 py-2 rounded-lg border border-light-border dark:border-app-border bg-light-card dark:bg-app-card text-sm text-slate-900 dark:text-white"
+        />
+        <button
+          type="submit"
+          class="px-3 py-2 rounded-lg border border-light-border dark:border-app-border text-slate-600 dark:text-slate-300 text-xs font-semibold flex-shrink-0"
+          disabled={!coverUrlInput.trim()}
+        >
+          Utiliser
+        </button>
+      </form>
       {#if coverLoading}
         <p class="text-center text-sm text-slate-400 py-5">Recherche…</p>
       {:else if coverCandidates.length === 0}
